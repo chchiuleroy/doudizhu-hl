@@ -1,0 +1,832 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鬥地主</title>
+<style>
+:root{--bg:#f3efe6;--panel:#fffdf8;--ink:#221f1a;--mute:#756e61;--line:#ddd5c4;--accent:#2f7a55;--accent-ink:#fff;--warn:#b4442b;--gold:#c99a2e;--felt1:#2b7a54;--felt2:#17503a}
+@media (prefers-color-scheme:dark){:root{--bg:#171815;--panel:#22241f;--ink:#ece8dc;--mute:#a29c8d;--line:#3a3c35;--accent:#58b98a;--accent-ink:#0f1f17;--warn:#e27d62;--gold:#e0b550;--felt1:#215f43;--felt2:#123b2b}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{opacity:.4;cursor:not-allowed}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 16px}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+.btn.ghost{background:transparent}
+.mute{color:var(--mute);font-size:13px}
+[hidden]{display:none!important}
+
+/* ===== 開始畫面 ===== */
+#start{max-width:640px;margin:0 auto;padding:22px 16px 40px}
+#start h1{margin:0;font-size:30px;letter-spacing:2px}
+#start .sub{margin:2px 0 18px}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0}
+.step h2{margin:0 0 10px;font-size:14px;color:var(--mute);font-weight:600}
+.step h2 b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:99px;background:var(--accent);color:var(--accent-ink);margin-right:8px;font-size:13px}
+.choices{display:grid;gap:10px}
+.choices.c2{grid-template-columns:1fr 1fr}
+.choices.c3{grid-template-columns:repeat(3,1fr)}
+.choice{border:2px solid var(--line);background:var(--bg);border-radius:12px;padding:12px;text-align:left;transition:.12s}
+.choice b{display:block;font-size:17px}
+.choice .mute{display:block;margin-top:2px}
+.choice:hover{border-color:var(--accent)}
+.choice[aria-pressed=true]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--panel))}
+.sw{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw input{width:20px;height:20px;accent-color:var(--accent)}
+#summary{margin:14px 0 4px;padding:12px;border-radius:12px;background:color-mix(in srgb,var(--gold) 16%,var(--panel));border:1px solid color-mix(in srgb,var(--gold) 45%,var(--line))}
+#goBtn{width:100%;padding:14px;font-size:17px;margin-top:10px}
+.suits{font-size:20px;letter-spacing:3px}
+
+/* ===== 牌桌 ===== */
+#game{max-width:980px;margin:0 auto;padding:8px 10px 20px}
+.top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 8px}
+.top .grow{flex:1}
+.badge{display:inline-block;padding:2px 10px;border-radius:99px;background:var(--panel);border:1px solid var(--line);font-size:13px}
+.felt{border-radius:22px;padding:12px;background:radial-gradient(ellipse at 50% 30%,var(--felt1),var(--felt2));box-shadow:inset 0 0 0 3px rgba(255,255,255,.08),0 6px 24px rgba(0,0,0,.25);color:#fff}
+.row3{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:8px}
+.seat{border-radius:14px;padding:8px 10px;background:rgba(0,0,0,.22);border:2px solid transparent;min-height:78px}
+.seat.turn{border-color:var(--gold);box-shadow:0 0 14px rgba(224,181,80,.55)}
+.seat .nm{display:flex;align-items:center;gap:6px;font-weight:700;flex-wrap:wrap}
+.seat .role{font-size:12px;padding:1px 8px;border-radius:99px;background:rgba(255,255,255,.18)}
+.seat .cnt{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:13px;opacity:.95}
+.seat .think{color:var(--gold);font-size:12px}
+.bottomcards{text-align:center}
+.bottomcards .lab{font-size:12px;opacity:.85;margin-bottom:3px}
+.minirow{display:flex;justify-content:center;gap:4px;flex-wrap:wrap}
+.plays{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:8px;margin:10px 0;min-height:104px}
+.slot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:12px;background:rgba(0,0,0,.14);padding:6px;min-height:100px}
+.slot .who{font-size:12px;opacity:.85}
+.slot .pass{font-size:18px;font-weight:700;opacity:.85}
+.slot.turn{outline:2px dashed rgba(224,181,80,.75)}
+.fan{display:flex;flex-wrap:nowrap;justify-content:center}
+.fan .card{flex:none}
+
+/* ===== 撲克牌 ===== */
+.card{--w:56px;position:relative;width:var(--w);height:calc(var(--w)*1.42);border-radius:calc(var(--w)*.13);background:#fff;color:#161616;box-shadow:0 1px 3px rgba(0,0,0,.35);user-select:none;transition:transform .1s;font-weight:700;overflow:hidden;border:1px solid #cfcfcf}
+.card.red{color:#c62828}
+.card .tl{position:absolute;left:calc(var(--w)*.09);top:calc(var(--w)*.05);line-height:1;font-size:calc(var(--w)*.3);text-align:center}
+.card .tl i{display:block;font-style:normal;font-size:calc(var(--w)*.26)}
+.card .ct{position:absolute;right:calc(var(--w)*.1);bottom:calc(var(--w)*.05);font-size:calc(var(--w)*.5);line-height:1}
+.card.joker .tl{font-size:calc(var(--w)*.2);writing-mode:vertical-rl;letter-spacing:1px;left:calc(var(--w)*.14)}
+.card.joker .ct{font-size:calc(var(--w)*.55);right:auto;left:50%;bottom:20%;transform:translateX(-50%)}
+.card.back{background:repeating-linear-gradient(45deg,#2b4c9b,#2b4c9b 5px,#27418a 5px,#27418a 10px);border:2px solid #fff}
+.card.sm{--w:34px}
+.card.xs{--w:20px}
+.card.sel{transform:translateY(-16px)}
+.card.hint{outline:3px solid var(--gold)}
+.card.dim{filter:brightness(.8)}
+#hand{padding:20px 4px 4px;min-height:calc(56px*1.42 + 30px)}
+.controls{display:flex;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:6px}
+.controls .btn{min-width:76px}
+/* 牌桌內的按鈕：淺色模式下 --panel 是白色，而牌桌文字是白色 → 白底白字。這裡明確指定，不依賴主題變數 */
+.felt .btn{background:rgba(0,0,0,.4);color:#fff;border-color:rgba(255,255,255,.4)}
+.felt .btn:hover:not(:disabled){background:rgba(0,0,0,.55)}
+.felt .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.felt .mute{color:rgba(255,255,255,.78)}      /* 牌桌上的次要文字：主題灰色在綠底上看不見 */
+.legend{font-size:12px;opacity:.9;text-align:center;margin-top:4px}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 16px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+#toast.on{opacity:.95}
+#result{position:fixed;inset:0;background:rgba(0,0,0,.55);display:grid;place-items:center;z-index:30;padding:16px}
+#result .box{background:var(--panel);border-radius:18px;padding:22px;max-width:520px;width:100%;text-align:center;border:1px solid var(--line)}
+#result h2{margin:0 0 6px;font-size:28px}
+#result .rest{margin:10px 0;text-align:left;font-size:13px}
+#result .rest .minirow{justify-content:flex-start;margin:3px 0}
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);max-width:560px;width:calc(100% - 28px);padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h3{margin:0 0 8px}
+dialog table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0}
+dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;vertical-align:top}
+@media (max-width:620px){
+  .card{--w:44px}.card.sm{--w:28px}.card.xs{--w:18px}
+  .seat{padding:6px}.slot{min-height:84px}
+  #start h1{font-size:26px}
+  .choices.c3{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ 開始畫面 ============ -->
+<main id="start">
+  <h1>鬥地主 <span class="suits" aria-hidden="true">♠♥♦♣</span></h1>
+  <div class="mute sub">單檔遊戲，不需要伺服器。花色大小 ♠ &gt; ♥ &gt; ♦ &gt; ♣。</div>
+
+  <section class="step">
+    <h2><b>1</b>選擇模式</h2>
+    <div class="choices c2" id="modeChoices">
+      <button class="choice" data-v="solo" aria-pressed="true"><b>單人遊玩</b><span class="mute">你一個人，另外兩個位置由 NPC 補上</span></button>
+      <button class="choice" data-v="spectate" aria-pressed="false"><b>觀戰</b><span class="mute">三位 NPC 對打，看他們怎麼出牌</span></button>
+    </div>
+  </section>
+
+  <section class="step" id="roleStep">
+    <h2><b>2</b>選擇你的身分</h2>
+    <div class="choices c2" id="roleChoices">
+      <button class="choice" data-v="landlord" aria-pressed="true"><b>👑 地主</b><span class="mute">20 張牌（含 3 張底牌），一人對兩位農民，先出完獲勝</span></button>
+      <button class="choice" data-v="farmer" aria-pressed="false"><b>🌾 農民</b><span class="mute">17 張牌，與另一位農民（NPC）同隊對抗地主（NPC）</span></button>
+    </div>
+    <div id="seatWrap" hidden style="margin-top:10px">
+      <div class="mute" style="margin-bottom:6px">農民的座位（出牌順序：地主 → 地主下家 → 地主上家）</div>
+      <div class="choices c3" id="seatChoices">
+        <button class="choice" data-v="1" aria-pressed="true"><b>地主下家</b><span class="mute">地主之後出牌</span></button>
+        <button class="choice" data-v="2" aria-pressed="false"><b>地主上家</b><span class="mute">地主之前出牌</span></button>
+        <button class="choice" data-v="rand" aria-pressed="false"><b>隨機</b><span class="mute">開局抽籤</span></button>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <h2><b>3</b>NPC 與規則</h2>
+    <div class="choices c3" id="levelChoices">
+      <button class="choice" data-v="easy" aria-pressed="false"><b>簡單</b><span class="mute">只出最小的牌，不會主動留炸彈</span></button>
+      <button class="choice" data-v="hard" aria-pressed="true"><b>標準</b><span class="mute">HL 啟發式（先前驗證過的 v2 策略）</span></button>
+      <button class="choice" data-v="expert" aria-pressed="false"><b>困難</b><span class="mute">蒙地卡羅搜尋：推測你手上的牌並模擬整局，每手約 1～2 秒</span></button>
+    </div>
+    <label class="sw" style="margin-top:12px"><span><b>花色大小規則</b><br><span class="mute">同點數時比花色：♠ &gt; ♥ &gt; ♦ &gt; ♣（單張、對子、順子等看最大那張的花色）。關閉＝同點數不能互壓。</span></span><input type="checkbox" id="suitRule" checked></label>
+  </section>
+
+  <div id="summary"></div>
+  <button class="btn primary" id="goBtn">開始遊戲</button>
+  <div class="row" style="display:flex;gap:10px;justify-content:space-between;margin-top:12px;align-items:center">
+    <span class="mute" id="statsLine"></span>
+    <button class="btn ghost" id="rulesBtn1">規則說明</button>
+  </div>
+</main>
+
+<!-- ============ 牌桌 ============ -->
+<main id="game" hidden>
+  <div class="top">
+    <span class="badge" id="meBadge"></span>
+    <span class="badge" id="suitBadge"></span>
+    <span class="grow"></span>
+    <button class="btn ghost" id="rulesBtn2">規則</button>
+    <button class="btn ghost" id="menuBtn">回選單</button>
+  </div>
+  <div class="felt">
+    <div class="row3">
+      <div class="seat" id="seatL"></div>
+      <div class="bottomcards"><div class="lab">地主底牌</div><div class="minirow" id="bottomRow"></div></div>
+      <div class="seat" id="seatR"></div>
+    </div>
+    <div class="plays">
+      <div class="slot" id="playL"></div>
+      <div class="slot" id="playM"></div>
+      <div class="slot" id="playR"></div>
+    </div>
+    <div class="seat" id="seatMe" style="min-height:0"></div>
+    <div id="hand" class="fan"></div>
+    <div class="controls">
+      <button class="btn" id="hintBtn">提示</button>
+      <button class="btn" id="clearBtn">重選</button>
+      <button class="btn" id="passBtn">不出</button>
+      <button class="btn primary" id="playBtn">出牌</button>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+</main>
+
+<div id="toast"></div>
+
+<div id="result" hidden>
+  <div class="box">
+    <h2 id="resTitle"></h2>
+    <div id="resSub" class="mute"></div>
+    <div class="rest" id="resRest"></div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px">
+      <button class="btn primary" id="againBtn">再來一局</button>
+      <button class="btn" id="resMenuBtn">回選單</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="rulesDlg">
+  <h3>規則說明</h3>
+  <div class="mute">54 張牌，地主 20 張（含 3 張底牌）、農民各 17 張。先出完手牌的一方獲勝；兩位農民同隊。</div>
+  <table>
+    <tr><th>牌型</th><th>說明</th></tr>
+    <tr><td>單張／對子／三張</td><td>同點數 1／2／3 張</td></tr>
+    <tr><td>三帶一／三帶二</td><td>三張帶 1 張或 1 對</td></tr>
+    <tr><td>順子</td><td>5 張以上連續單牌（3 到 A，不含 2 與王）</td></tr>
+    <tr><td>連對</td><td>3 對以上連續對子</td></tr>
+    <tr><td>飛機</td><td>2 組以上連續三張，可各帶 1 張或 1 對</td></tr>
+    <tr><td>四帶二</td><td>四張帶 2 張單牌或 2 對</td></tr>
+    <tr><td>炸彈／王炸</td><td>四張同點；大小王一起＝最大</td></tr>
+  </table>
+  <p><b>點數大小</b>：3 &lt; 4 &lt; … &lt; K &lt; A &lt; 2 &lt; 小王 &lt; 大王</p>
+  <p><b>花色大小</b>：<span class="suits">♠ &gt; ♥ &gt; ♦ &gt; ♣</span><br><span class="mute">開啟時，同點數的同牌型可以用較大花色壓過（例如 ♥7 可被 ♠7 壓過；對子看較大的那張花色）。順子、連對等連續牌型比最高那一張。點數優先於花色。</span></p>
+  <p class="mute">跟牌必須同牌型且張數相同並更大；炸彈可壓任何非炸彈；王炸最大。兩人連續不出，由最後出牌者重新領出。</p>
+  <form method="dialog"><button class="btn primary">關閉</button></form>
+</dialog>
+
+<script>
+'use strict';
+/* =====================================================================
+ * 引擎（純函式，無 DOM；Node 測試會直接載入這一段）
+ * ===================================================================== */
+const RANK_LABEL = ['3','4','5','6','7','8','9','10','J','Q','K','A','2','小王','大王'];
+const SUIT_SYM = ['♣','♦','♥','♠'];          // 索引 = 花色強度：♣0 < ♦1 < ♥2 < ♠3
+const SUIT_NAME = ['梅花','方塊','愛心','黑桃'];
+const RULES = { suit: true };                // 花色大小規則（可由設定開關）
+
+function makeDeck() {
+  const d = [];
+  for (let r = 0; r < 13; r++) for (let s = 0; s < 4; s++) d.push({ id: r * 4 + s, r, s });
+  d.push({ id: 52, r: 13, s: -1 }, { id: 53, r: 14, s: -1 });
+  return d;
+}
+function makeRng(seed) {                     // mulberry32：可用 ?seed= 重現牌局
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffle(arr, rand) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function sortHand(h) { return h.slice().sort((a, b) => b.r - a.r || b.s - a.s); }  // 大到小；同點數 ♠♥♦♣
+function groupByRank(hand) {
+  const g = Array.from({ length: 15 }, () => []);
+  hand.forEach(c => g[c.r].push(c));
+  g.forEach(a => a.sort((x, y) => x.s - y.s));   // 同點數內：低花色在前
+  return g;
+}
+function consecutive(rs) { for (let i = 1; i < rs.length; i++) if (rs[i] - rs[i - 1] !== 1) return false; return true; }
+
+/* 牌型辨識：回傳 {t,r,n,len,tie} 或 null。r = 主牌點數（連續牌型為最高那組）、tie = 該點數牌中最大的花色 */
+function classify(cards) {
+  const n = cards.length;
+  if (n === 0) return null;
+  const cnt = new Map();
+  cards.forEach(c => cnt.set(c.r, (cnt.get(c.r) || 0) + 1));
+  const ranks = [...cnt.keys()].sort((a, b) => a - b);
+  const finish = p => {
+    const top = cards.filter(c => c.r === p.r);
+    p.tie = top.length ? Math.max(...top.map(c => c.s)) : -1;
+    return p;
+  };
+  if (n === 2 && cnt.has(13) && cnt.has(14)) return finish({ t: 'rocket', r: 14, n });
+  if (n === 1) return finish({ t: 'single', r: ranks[0], n });
+  if (n === 2 && ranks.length === 1) return finish({ t: 'pair', r: ranks[0], n });
+  if (n === 3 && ranks.length === 1) return finish({ t: 'trio', r: ranks[0], n });
+  if (n === 4 && ranks.length === 1) return finish({ t: 'bomb', r: ranks[0], n });
+  const by = k => ranks.filter(r => cnt.get(r) === k);
+  const c1 = by(1), c2 = by(2), c3 = by(3), c4 = by(4);
+  if (n === 4 && c3.length === 1 && c1.length === 1) return finish({ t: 'trio1', r: c3[0], n });
+  if (n === 5 && c3.length === 1 && c2.length === 1) return finish({ t: 'trio2', r: c3[0], n });
+  if (n >= 5 && ranks.length === n && consecutive(ranks) && ranks[n - 1] <= 11)
+    return finish({ t: 'straight', r: ranks[n - 1], n, len: n });
+  if (n >= 6 && n % 2 === 0 && ranks.length === n / 2 && c2.length === n / 2 && consecutive(ranks) && ranks[ranks.length - 1] <= 11)
+    return finish({ t: 'pairchain', r: ranks[ranks.length - 1], n, len: n / 2 });
+  if (n === 6 && c4.length === 1) return finish({ t: 'four2', r: c4[0], n });
+  if (n === 8 && c4.length === 1 && ranks.length === 3 && by(2).length === 2) return finish({ t: 'four22', r: c4[0], n });
+  // 飛機：k 組連續三張（點數 ≤ A），剩餘 0／k 張／k 對
+  const elig = ranks.filter(r => cnt.get(r) >= 3 && r <= 11);
+  for (let k = Math.floor(n / 3); k >= 2; k--) {
+    for (let i = elig.length - k; i >= 0; i--) {
+      const run = elig.slice(i, i + k);
+      if (run.length < k || !consecutive(run)) continue;
+      const rest = new Map(cnt);
+      run.forEach(r => rest.set(r, rest.get(r) - 3));
+      const remN = n - 3 * k;
+      const top = run[run.length - 1];
+      if (remN === 0) return finish({ t: 'plane', r: top, n, len: k });
+      if (remN === k) return finish({ t: 'plane1', r: top, n, len: k });
+      if (remN === 2 * k && [...rest.values()].every(v => v % 2 === 0)) return finish({ t: 'plane2', r: top, n, len: k });
+    }
+  }
+  return null;
+}
+const isPower = p => p.t === 'bomb' || p.t === 'rocket';
+
+/* cur 能否壓過 prev（prev 為 null 表示領出） */
+function beats(cur, prev) {
+  if (!cur) return false;
+  if (!prev) return true;
+  if (cur.t === 'rocket') return true;
+  if (prev.t === 'rocket') return false;
+  if (cur.t === 'bomb' && prev.t !== 'bomb') return true;
+  if (cur.t !== prev.t || cur.n !== prev.n) return false;
+  if (cur.r > prev.r) return true;
+  if (cur.r === prev.r && RULES.suit && cur.t !== 'bomb') return cur.tie > prev.tie;   // 同點數：花色決勝
+  return false;
+}
+
+/* ---------- 合法出牌枚舉（NPC 與提示用） ---------- */
+function combos(arr, k) {
+  const out = [];
+  (function rec(s, cur) {
+    if (cur.length === k) { out.push(cur.slice()); return; }
+    for (let i = s; i < arr.length; i++) { cur.push(arr[i]); rec(i + 1, cur); cur.pop(); }
+  })(0, []);
+  return out;
+}
+function lowestCards(hand, exclude, k) {          // 不含 exclude 的最小 k 張（依點數、花色）
+  const ex = new Set(exclude.map(c => c.id));
+  return hand.filter(c => !ex.has(c.id)).sort((a, b) => a.r - b.r || a.s - b.s).slice(0, k);
+}
+function lowestPairs(hand, exclude, k) {          // 不含 exclude 的最小 k 組對子（不同點數）
+  const ex = new Set(exclude.map(c => c.id));
+  const g = groupByRank(hand.filter(c => !ex.has(c.id)));
+  const out = [];
+  for (let r = 0; r <= 12 && out.length < k; r++) if (g[r].length >= 2) out.push(g[r][0], g[r][1]);
+  return out.length === 2 * k ? out : null;
+}
+function generateAll(hand) {
+  const g = groupByRank(hand), out = [];
+  const add = cards => { const pat = classify(cards); if (pat) out.push({ cards, pat }); };
+  hand.forEach(c => add([c]));
+  for (let r = 0; r <= 12; r++) {
+    if (g[r].length >= 2) combos(g[r], 2).forEach(add);
+    if (g[r].length >= 3) {
+      combos(g[r], 3).forEach(t => {
+        add(t);
+        for (let q = 0; q <= 14; q++) {
+          if (q === r || !g[q].length) continue;
+          add([...t, g[q][0]]);                                   // 三帶一
+          if (q <= 12 && g[q].length >= 2) add([...t, g[q][0], g[q][1]]);   // 三帶二
+        }
+      });
+    }
+    if (g[r].length === 4) {
+      add(g[r]);
+      const s2 = lowestCards(hand, g[r], 2);
+      if (s2.length === 2) add([...g[r], ...s2]);
+      const p2 = lowestPairs(hand, g[r], 2);
+      if (p2) add([...g[r], ...p2]);
+    }
+  }
+  if (g[13].length && g[14].length) add([g[13][0], g[14][0]]);
+  // 順子（最高那張枚舉各花色，其餘取最低花色）
+  for (let s = 0; s <= 11; s++) {
+    for (let e = s; e <= 11; e++) {
+      if (!g[e].length) break;
+      if (e - s + 1 < 5) { if (!g[e].length) break; continue; }
+      const base = [];
+      for (let r = s; r < e; r++) base.push(g[r][0]);
+      g[e].forEach(c => add([...base, c]));
+    }
+  }
+  // 連對
+  for (let s = 0; s <= 11; s++) {
+    for (let e = s; e <= 11; e++) {
+      if (g[e].length < 2) break;
+      if (e - s + 1 < 3) continue;
+      const base = [];
+      for (let r = s; r < e; r++) base.push(g[r][0], g[r][1]);
+      combos(g[e], 2).forEach(p => add([...base, ...p]));
+    }
+  }
+  // 飛機（純、帶單、帶對）
+  for (let s = 0; s <= 11; s++) {
+    for (let e = s + 1; e <= 11; e++) {
+      if (g[e].length < 3) break;
+      const k = e - s + 1;
+      if (k < 2) continue;
+      if (g[s].length < 3) break;
+      let ok = true;
+      for (let r = s; r <= e; r++) if (g[r].length < 3) ok = false;
+      if (!ok) continue;
+      const base = [];
+      for (let r = s; r < e; r++) base.push(g[r][0], g[r][1], g[r][2]);
+      combos(g[e], 3).forEach(t => {
+        const plane = [...base, ...t];
+        add(plane);
+        const ks = lowestCards(hand, plane, k);
+        if (ks.length === k) add([...plane, ...ks]);
+        const kp = lowestPairs(hand, plane, k);
+        if (kp) add([...plane, ...kp]);
+      });
+    }
+  }
+  return out;
+}
+function legalPlays(hand, table) {
+  const all = generateAll(hand);
+  return table ? all.filter(p => beats(p.pat, table.pat)) : all;
+}
+
+/* ---------- NPC：標準 = HL v2 啟發式移植；簡單 = 只出最小的牌 ---------- */
+function leadCost(p) {                           // 越小越先出：小牌多張優先，保留炸彈／2／王
+  if (isPower(p.pat)) return 10000 + p.pat.r;
+  const n = p.cards.length;
+  return p.cards.reduce((a, c) => a + c.r, 0) / n - 1.5 * n + p.cards.reduce((a, c) => a + Math.max(c.s, 0), 0) / 1000;
+}
+function minBy(arr, f) { let best = null, bv = Infinity; arr.forEach(x => { const v = f(x); if (v < bv) { bv = v; best = x; } }); return best; }
+function maxBy(arr, f) { return minBy(arr, x => -f(x)); }
+function rankKey(p) { return p.pat.r * 10 + Math.max(p.pat.tie, 0) + p.cards.reduce((a, c) => a + Math.max(c.s, 0), 0) / 1000; }
+
+/* ctx: {hand, table:{seat,cards,pat}|null, me, landlord, counts:[3]} → {cards,pat} 或 null（不出） */
+function npcChoose(level, ctx) {
+  level = level === 'easy' ? 'easy' : 'hard';      // 'expert'（困難）的模擬與後備都用標準啟發式
+  const { hand, table, me, landlord, counts } = ctx;
+  const plays = legalPlays(hand, table);
+  const goOut = plays.find(p => p.cards.length === hand.length);
+  if (goOut) return goOut;
+  const enemies = [0, 1, 2].filter(i => i !== me && (me === landlord || i === landlord));
+  const oppLeft = Math.min(...enemies.map(i => counts[i]));
+  if (!table) {
+    if (level === 'easy') {
+      const singles = plays.filter(p => p.pat.t === 'single');
+      return minBy(singles.length ? singles : plays, leadCost);
+    }
+    if (oppLeft === 1) {                          // 對手只剩一張：別領單張
+      const multi = plays.filter(p => p.cards.length > 1 && !isPower(p.pat));
+      if (multi.length) return minBy(multi, leadCost);
+      return maxBy(plays.filter(p => !isPower(p.pat)), rankKey) || minBy(plays, leadCost);
+    }
+    return minBy(plays, leadCost);
+  }
+  if (!plays.length) return null;
+  const teammate = me !== landlord && table.seat !== landlord;
+  if (teammate) return null;                      // 隊友的牌不壓
+  const normal = plays.filter(p => !isPower(p.pat));
+  if (normal.length) return minBy(normal, rankKey);
+  if (level === 'hard' && oppLeft <= 4) return minBy(plays, p => p.pat.r);
+  return null;
+}
+
+/* ---------- 牌局狀態（純邏輯，UI 另外接） ---------- */
+function newDeal(rand) {
+  const deck = shuffle(makeDeck(), rand);
+  const hands = [deck.slice(0, 17), deck.slice(17, 34), deck.slice(34, 51)];
+  const bottom = deck.slice(51);
+  hands[0] = hands[0].concat(bottom);             // 座位 0 固定為地主
+  return { hands: hands.map(sortHand), bottom: sortHand(bottom) };
+}
+function makeGame(opts) {
+  const rand = makeRng(opts.seed);
+  const d = newDeal(rand);
+  return { hands: d.hands, bottom: d.bottom, landlord: 0, turn: 0, table: null, passes: 0, over: false, winner: null,
+           last: [null, null, null], me: opts.me, level: opts.level, plays: 0, history: [] };
+}
+function applyPlay(G, seat, cards, pat) {
+  const ids = new Set(cards.map(c => c.id));
+  G.hands[seat] = G.hands[seat].filter(c => !ids.has(c.id));
+  G.table = { seat, cards, pat };
+  G.passes = 0;
+  G.last[seat] = { cards };
+  G.history.push({ seat, cards: cards.map(c => c.id) });
+  G.plays++;
+  if (G.hands[seat].length === 0) { G.over = true; G.winner = seat; return; }
+  G.turn = (seat + 1) % 3;
+}
+function applyPass(G, seat) {
+  G.passes++;
+  G.last[seat] = { pass: true };
+  G.history.push({ seat, pass: true });
+  if (G.passes >= 2) {                            // 兩人連續不出：最後出牌者重新領出，桌面清空
+    G.turn = G.table.seat;
+    G.table = null;
+    G.passes = 0;
+    G.last = [null, null, null];
+  } else G.turn = (seat + 1) % 3;
+}
+function npcMove(G, seat) {
+  const ctx = { hand: G.hands[seat], table: G.table, me: seat, landlord: G.landlord, counts: G.hands.map(h => h.length) };
+  const mv = npcChoose(G.level, ctx);
+  if (mv) applyPlay(G, seat, mv.cards, mv.pat); else applyPass(G, seat);
+  return mv;
+}
+function farmersWin(G) { return G.over && G.winner !== G.landlord; }
+
+/* ---------- 困難 NPC：蒙地卡羅（determinization）搜尋 ----------
+ * 只使用該座位「看得到」的資訊：自己的手牌、各家張數、完整出牌紀錄、地主公開底牌、桌面。
+ * 把其他人手上未知的牌隨機分配（多種可能），對每個候選出牌各模擬打完整局（模擬時各方用標準啟發式），
+ * 選贏的次數最多的那一手。所有候選用同一批抽樣比較（減少變異）。 */
+function publicInfo(G, seat) {
+  const played = new Set();
+  G.history.forEach(h => h.cards && h.cards.forEach(id => played.add(id)));
+  return { seat, hand: G.hands[seat].slice(), counts: G.hands.map(h => h.length), landlord: G.landlord,
+           table: G.table, passes: G.passes, played, bottomIds: G.bottom.map(c => c.id) };
+}
+function determinize(info, rand) {
+  const mine = new Set(info.hand.map(c => c.id));
+  const pool = makeDeck().filter(c => !mine.has(c.id) && !info.played.has(c.id));   // 其他兩家手上剩下的牌
+  const hands = [[], [], []];
+  hands[info.seat] = info.hand.slice();
+  let rest = pool;
+  if (info.seat !== info.landlord) {              // 地主底牌是公開的：還沒出過的一定在地主手上
+    const pin = pool.filter(c => info.bottomIds.includes(c.id));
+    hands[info.landlord] = pin;
+    const pinned = new Set(pin.map(c => c.id));
+    rest = pool.filter(c => !pinned.has(c.id));
+  }
+  shuffle(rest, rand);
+  [0, 1, 2].filter(s => s !== info.seat).forEach(s => {
+    hands[s] = hands[s].concat(rest.splice(0, info.counts[s] - hands[s].length));
+  });
+  return hands;
+}
+function moveKey(mv) { return mv ? mv.cards.map(c => c.id).sort((a, b) => a - b).join(',') : 'pass'; }
+function pimcCandidates(info) {
+  const ctx = { hand: info.hand, table: info.table, me: info.seat, landlord: info.landlord, counts: info.counts };
+  const plays = legalPlays(info.hand, info.table);
+  const heur = npcChoose('hard', ctx);            // 標準啟發式的選擇一定列入候選（搜尋只會比它更好或相同）
+  let cand = [];
+  if (!info.table) {
+    const sorted = plays.slice().sort((a, b) => leadCost(a) - leadCost(b));
+    const seenType = new Set();
+    sorted.forEach(p => { if (!seenType.has(p.pat.t + p.pat.n)) { seenType.add(p.pat.t + p.pat.n); cand.push(p); } });   // 每種牌型取最低成本者
+    cand = cand.concat(sorted.filter(p => !isPower(p.pat)).slice(0, 6));
+    cand = cand.concat(sorted.filter(p => isPower(p.pat)).slice(0, 2));
+    const bigSingle = maxBy(plays.filter(p => p.pat.t === 'single'), rankKey);
+    if (bigSingle) cand.push(bigSingle);
+  } else {
+    const byRank = plays.slice().sort((a, b) => rankKey(a) - rankKey(b));
+    cand = byRank.filter(p => !isPower(p.pat)).slice(0, 5)
+      .concat(byRank.filter(p => p.pat.t === 'bomb').slice(0, 1), byRank.filter(p => p.pat.t === 'rocket'));
+    cand.push(null);                              // 不出
+  }
+  const out = [], seen = new Set();
+  [heur, ...cand].forEach(mv => { const k = moveKey(mv); if (!seen.has(k)) { seen.add(k); out.push(mv); } });
+  return out.slice(0, 14);
+}
+function pimcRollout(info, hands, mv) {
+  const sim = { hands: hands.map(h => h.slice()), landlord: info.landlord, turn: info.seat, table: info.table, passes: info.passes,
+                over: false, winner: null, last: [null, null, null], level: 'hard', history: [], bottom: [], plays: 0 };
+  if (mv) applyPlay(sim, info.seat, mv.cards, mv.pat); else applyPass(sim, info.seat);
+  let guard = 0;
+  while (!sim.over && guard++ < 300) npcMove(sim, sim.turn);
+  return info.seat === info.landlord ? sim.winner === info.landlord : sim.winner !== info.landlord;
+}
+/* generator 版：每抽一個樣本就 yield 一次，讓 UI 能分段執行不卡畫面；pimcChoose 是同步驅動 */
+function* pimcSteps(info, opts) {
+  const o = Object.assign({ rand: Math.random, samples: 40, minSamples: 6, budgetMs: 1200 }, opts || {});
+  const cand = pimcCandidates(info);
+  if (cand.length === 1) return cand[0];
+  const goOut = cand.find(mv => mv && mv.cards.length === info.hand.length);
+  if (goOut) return goOut;
+  const wins = cand.map(() => 0);
+  const t0 = Date.now();
+  let n = 0;
+  while (n < o.samples && (n < o.minSamples || Date.now() - t0 < o.budgetMs)) {
+    const hands = determinize(info, o.rand);
+    cand.forEach((mv, i) => { if (pimcRollout(info, hands, mv)) wins[i]++; });
+    n++;
+    yield n;
+  }
+  let best = 0;
+  for (let i = 1; i < cand.length; i++) if (wins[i] > wins[best]) best = i;     // 同分取較前面的（啟發式優先）
+  return cand[best];
+}
+function pimcChoose(info, opts) {
+  const it = pimcSteps(info, opts);
+  let r;
+  while (!(r = it.next()).done) { /* 同步跑完 */ }
+  return r.value;
+}
+function expertMove(G, seat, opts) {                // 測試與非同步 UI 共用的入口：套用一手
+  const mv = pimcChoose(publicInfo(G, seat), opts);
+  if (mv) applyPlay(G, seat, mv.cards, mv.pat); else applyPass(G, seat);
+  return mv;
+}
+
+if (typeof __TEST__ !== 'undefined') {
+  Object.assign(__TEST__, { RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
+                            publicInfo, determinize, pimcCandidates, pimcChoose, expertMove, shuffle });
+}
+
+/* =====================================================================
+ * UI
+ * ===================================================================== */
+function initUI() {
+  const $ = id => document.getElementById(id);
+  const S = { mode: 'solo', role: 'landlord', seatPick: '1', level: 'hard', suit: true };
+  const params = new URLSearchParams(location.search);
+  let G = null, sel = new Set(), timer = null, token = 0, hintSet = null, startOpts = null;
+
+  /* ---- 設定／統計（localStorage 可能被擋：全部 try/catch） ---- */
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 無法存檔也能玩 */ } }
+  };
+  Object.assign(S, store.get('ddz_solo_settings', {}));
+  let stats = store.get('ddz_solo_stats', { landlord: [0, 0], farmer: [0, 0] });
+
+  /* ---- 開始畫面 ---- */
+  function pressGroup(id, key) {
+    const wrap = $(id);
+    wrap.querySelectorAll('.choice').forEach(b => {
+      b.setAttribute('aria-pressed', String(String(S[key]) === b.dataset.v));
+      b.onclick = () => { S[key] = b.dataset.v; refreshStart(); };
+    });
+  }
+  function refreshStart() {
+    pressGroup('modeChoices', 'mode'); pressGroup('roleChoices', 'role');
+    pressGroup('seatChoices', 'seatPick'); pressGroup('levelChoices', 'level');
+    $('roleStep').hidden = S.mode === 'spectate';
+    $('seatWrap').hidden = S.role !== 'farmer';
+    $('suitRule').checked = !!S.suit;
+    const lv = { easy: '簡單', hard: '標準', expert: '困難' }[S.level] || '標準';
+    if (S.mode === 'spectate') $('summary').innerHTML = `<b>觀戰</b>：三位 NPC（${lv}）對打。`;
+    else if (S.role === 'landlord') $('summary').innerHTML = `你是 <b>👑 地主</b>；NPC（${lv}）補上 <b>地主下家</b> 與 <b>地主上家</b>（兩位農民）。`;
+    else {
+      const sp = S.seatPick === '1' ? '地主下家' : S.seatPick === '2' ? '地主上家' : '隨機座位';
+      $('summary').innerHTML = `你是 <b>🌾 農民</b>（${sp}）；NPC（${lv}）補上 <b>地主</b> 與 <b>另一位農民</b>。`;
+    }
+    $('statsLine').textContent = `戰績　地主 ${stats.landlord[0]} 勝 ${stats.landlord[1]} 敗｜農民 ${stats.farmer[0]} 勝 ${stats.farmer[1]} 敗`;
+    store.set('ddz_solo_settings', S);
+  }
+  $('suitRule').onchange = e => { S.suit = e.target.checked; refreshStart(); };
+
+  function startGame(opts) {
+    startOpts = opts;
+    RULES.suit = opts.suit;
+    token++; clearTimeout(timer);
+    G = makeGame({ seed: opts.seed, me: opts.me, level: opts.level });
+    sel = new Set(); hintSet = null;
+    $('start').hidden = true; $('game').hidden = false; $('result').hidden = true;
+    render(); schedule();
+  }
+  function startFromMenu() {
+    const seed = params.get('seed') ? +params.get('seed') : Math.floor(Math.random() * 1e9);
+    let me = null;
+    if (S.mode === 'solo') {
+      if (S.role === 'landlord') me = 0;
+      else me = S.seatPick === 'rand' ? 1 + Math.floor(Math.random() * 2) : +S.seatPick;
+    }
+    startGame({ seed, me, level: S.level, suit: !!S.suit, mode: S.mode });
+  }
+  $('goBtn').onclick = startFromMenu;
+  $('menuBtn').onclick = () => { token++; clearTimeout(timer); $('game').hidden = true; $('start').hidden = false; $('result').hidden = true; refreshStart(); };
+  $('resMenuBtn').onclick = $('menuBtn').onclick;
+  $('againBtn').onclick = () => startGame({ ...startOpts, seed: Math.floor(Math.random() * 1e9) });
+  $('rulesBtn1').onclick = $('rulesBtn2').onclick = () => $('rulesDlg').showModal();
+
+  /* ---- 牌桌顯示 ---- */
+  const roleName = s => s === 0 ? '地主' : '農民';
+  const seatName = s => s === 0 ? '地主' : s === 1 ? '地主下家' : '地主上家';
+  function cardEl(c, cls) {
+    const d = document.createElement('div');
+    if (c.r >= 13) {
+      d.className = 'card joker ' + (c.r === 14 ? 'red ' : '') + (cls || '');
+      d.innerHTML = `<span class="tl">${c.r === 14 ? '大王' : '小王'}</span><span class="ct">★</span>`;
+    } else {
+      const red = c.s === 1 || c.s === 2;
+      d.className = 'card ' + (red ? 'red ' : '') + (cls || '');
+      d.innerHTML = `<span class="tl">${RANK_LABEL[c.r]}<i>${SUIT_SYM[c.s]}</i></span><span class="ct">${SUIT_SYM[c.s]}</span>`;
+    }
+    d.dataset.id = c.id;
+    return d;
+  }
+  function backEl(cls) { const d = document.createElement('div'); d.className = 'card back ' + (cls || ''); return d; }
+  function miniRow(cards, cls) { const r = document.createElement('div'); r.className = 'minirow'; cards.forEach(c => r.appendChild(cardEl(c, cls))); return r; }
+
+  function seatBox(el, seat, turn) {
+    const n = G.hands[seat].length, isMe = seat === G.me;
+    const who = isMe ? '你' : (G.me === null ? '電腦·' + ['地主', '下家', '上家'][seat] : '電腦');
+    el.className = 'seat' + (turn === seat && !G.over ? ' turn' : '');
+    el.innerHTML = `<div class="nm"><span>${seat === 0 ? '👑' : '🌾'}</span><span>${who}</span><span class="role">${roleName(seat)}</span></div>
+      <div class="cnt"></div>`;
+    const cnt = el.querySelector('.cnt');
+    if (!isMe) { cnt.appendChild(backEl('xs')); }
+    cnt.appendChild(Object.assign(document.createElement('span'), { textContent: `${n} 張` }));
+    if (turn === seat && !G.over && !isMe) cnt.appendChild(Object.assign(document.createElement('span'), { className: 'think', textContent: '思考中…' }));
+  }
+  function slotBox(el, seat, label) {
+    el.className = 'slot' + (G.turn === seat && !G.over ? ' turn' : '');
+    el.innerHTML = '';
+    const who = document.createElement('div'); who.className = 'who'; who.textContent = label; el.appendChild(who);
+    const l = G.last[seat];
+    if (l && l.pass) el.appendChild(Object.assign(document.createElement('div'), { className: 'pass', textContent: '不出' }));
+    else if (l && l.cards) el.appendChild(miniRow(l.cards, 'sm'));
+    else el.appendChild(Object.assign(document.createElement('div'), { className: 'mute', textContent: G.turn === seat && !G.over ? '輪到出牌' : '' }));
+  }
+  function render() {
+    const view = G.me === null ? 0 : G.me;
+    const right = (view + 1) % 3, left = (view + 2) % 3;
+    $('meBadge').textContent = G.me === null ? '觀戰中' : `你是 ${G.me === 0 ? '👑 地主' : '🌾 農民（' + seatName(G.me) + '）'}`;
+    $('suitBadge').textContent = RULES.suit ? '花色 ♠>♥>♦>♣ 開啟' : '花色規則 關閉';
+    $('legend').textContent = RULES.suit ? '同點數時比花色：♠ > ♥ > ♦ > ♣（點數優先於花色）' : '同點數不能互壓';
+    seatBox($('seatL'), left, G.turn); seatBox($('seatR'), right, G.turn);
+    $('bottomRow').innerHTML = ''; $('bottomRow').appendChild(miniRow(G.bottom, 'sm'));
+    slotBox($('playL'), left, seatName(left)); slotBox($('playR'), right, seatName(right));
+    slotBox($('playM'), view, G.me === null ? seatName(view) : '你');
+    // 我的牌（觀戰時蓋牌）
+    const hand = $('hand'); hand.innerHTML = '';
+    const mine = G.hands[view];
+    const w = hand.clientWidth || 640, cw = window.innerWidth <= 620 ? 44 : 56;   // 與 CSS 的 --w 一致
+    const step = Math.max(14, Math.min(cw * 0.62, (w - cw - 8) / Math.max(1, mine.length - 1)));
+    mine.forEach((c, i) => {
+      const el = G.me === null ? backEl() : cardEl(c);
+      el.style.marginLeft = i === 0 ? '0' : `${step - cw}px`;
+      if (G.me !== null) {
+        if (sel.has(c.id)) el.classList.add('sel');
+        if (hintSet && hintSet.has(c.id)) el.classList.add('hint');
+        el.onclick = () => { if (G.over) return; sel.has(c.id) ? sel.delete(c.id) : sel.add(c.id); hintSet = null; render(); };
+      }
+      hand.appendChild(el);
+    });
+    const myTurn = G.me !== null && G.turn === G.me && !G.over;
+    $('playBtn').disabled = !myTurn; $('hintBtn').disabled = !myTurn; $('clearBtn').disabled = G.me === null;
+    $('passBtn').disabled = !myTurn || !G.table;
+    document.querySelector('.controls').hidden = G.me === null;
+    seatBox($('seatMe'), view, G.turn);
+    $('seatMe').hidden = false;
+  }
+
+  /* ---- 出牌流程 ---- */
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 1600); }
+  function after() {
+    sel = new Set(); hintSet = null; render();
+    if (G.over) return finish();
+    schedule();
+  }
+  $('playBtn').onclick = () => {
+    if (G.me === null || G.turn !== G.me || G.over) return;
+    const cards = G.hands[G.me].filter(c => sel.has(c.id));
+    if (!cards.length) return toast('請先選牌');
+    const pat = classify(cards);
+    if (!pat) return toast('這不是合法牌型');
+    if (G.table && !beats(pat, G.table.pat)) {
+      const prev = G.table.pat;
+      return toast(RULES.suit && pat.t === prev.t && pat.n === prev.n && pat.r === prev.r ? '同點數要用較大的花色才壓得過' : '壓不過上一手');
+    }
+    applyPlay(G, G.me, cards, pat); after();
+  };
+  $('passBtn').onclick = () => { if (G.me === null || G.turn !== G.me || !G.table) return; applyPass(G, G.me); after(); };
+  $('clearBtn').onclick = () => { sel = new Set(); hintSet = null; render(); };
+  $('hintBtn').onclick = () => {
+    if (G.me === null || G.turn !== G.me) return;
+    const ctx = { hand: G.hands[G.me], table: G.table, me: G.me, landlord: G.landlord, counts: G.hands.map(h => h.length) };
+    const mv = npcChoose('hard', ctx);
+    if (!mv) { sel = new Set(); hintSet = null; render(); return toast('建議：不出'); }
+    sel = new Set(mv.cards.map(c => c.id)); hintSet = new Set(sel); render();
+  };
+
+  /* ---- NPC ---- */
+  function schedule() {
+    clearTimeout(timer);
+    if (G.over) return;
+    if (G.me !== null && G.turn === G.me) return;
+    const t = token, seat = G.turn;
+    const fast = !!params.get('fast');
+    if (G.level === 'expert') return runExpert(seat, t, fast);
+    const delay = fast ? 30 : (G.me === null ? 650 : 900 + Math.random() * 500);
+    timer = setTimeout(() => { if (t !== token || G.over || G.turn !== seat) return; npcMove(G, seat); after(); }, delay);
+  }
+  // 困難 NPC：蒙地卡羅搜尋分段執行（每段約 40ms），不卡畫面；至少讓人看到「思考中」約 0.8 秒
+  function runExpert(seat, t, fast) {
+    const info = publicInfo(G, seat);                       // 只取這個座位看得到的資訊
+    const it = pimcSteps(info, { budgetMs: fast ? 120 : 1200, samples: fast ? 12 : 80, minSamples: fast ? 4 : 8 });
+    const t0 = Date.now();
+    (function step() {
+      if (t !== token || G.over || G.turn !== seat) return;
+      const slice = Date.now();
+      let r;
+      do { r = it.next(); } while (!r.done && Date.now() - slice < 40);
+      if (!r.done) { timer = setTimeout(step, 0); return; }
+      const wait = fast ? 0 : Math.max(0, 800 - (Date.now() - t0));
+      timer = setTimeout(() => {
+        if (t !== token || G.over || G.turn !== seat) return;
+        const mv = r.value;
+        if (mv) applyPlay(G, seat, mv.cards, mv.pat); else applyPass(G, seat);
+        after();
+      }, wait);
+    })();
+  }
+
+  /* ---- 結算 ---- */
+  function finish() {
+    const landlordWon = !farmersWin(G);
+    let title, sub;
+    if (G.me === null) { title = landlordWon ? '地主獲勝' : '農民獲勝'; sub = `${seatName(G.winner)} 先出完`; }
+    else {
+      const meWin = G.me === 0 ? landlordWon : !landlordWon;
+      title = meWin ? '🎉 你贏了！' : '你輸了';
+      sub = `${landlordWon ? '地主' : '農民'}方獲勝（${seatName(G.winner)} 先出完）`;
+      const k = G.me === 0 ? 'landlord' : 'farmer';
+      stats[k][meWin ? 0 : 1]++; store.set('ddz_solo_stats', stats);
+    }
+    $('resTitle').textContent = title; $('resSub').textContent = sub;
+    const rest = $('resRest'); rest.innerHTML = '';
+    [0, 1, 2].forEach(s => {
+      if (!G.hands[s].length) return;
+      const d = document.createElement('div'); d.textContent = `${seatName(s)}${s === G.me ? '（你）' : ''} 剩 ${G.hands[s].length} 張：`;
+      rest.appendChild(d); rest.appendChild(miniRow(sortHand(G.hands[s]), 'xs'));
+    });
+    $('result').hidden = false;
+  }
+  window.addEventListener('resize', () => { if (G && !$('game').hidden) render(); });
+
+  /* ---- 啟動（網址參數方便測試：?spectate=1&seed=5&fast=1&auto=1） ---- */
+  refreshStart();
+  if (params.get('auto')) {
+    const seed = params.get('seed') ? +params.get('seed') : 1;
+    const me = params.get('spectate') ? null : (params.get('role') === 'farmer' ? 1 : 0);
+    startGame({ seed, me, level: params.get('level') || 'hard', suit: params.get('suit') !== '0', mode: me === null ? 'spectate' : 'solo' });
+  }
+  window.__ddz = { get G() { return G; }, startGame };   // 供除錯／自動化驗證
+}
+if (typeof document !== 'undefined' && document.getElementById) initUI();
+</script>
+</body>
+</html>

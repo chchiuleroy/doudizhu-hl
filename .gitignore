@@ -1,0 +1,15 @@
+# 私人設定與環境
+.vllm.env
+.venv/
+__pycache__/
+.claude/
+.recall/
+# 本機產生的對局資料與評估原始輸出（精選結果在 results/）
+replays/
+games.jsonl
+diag_*.json
+eval_*.log
+eval_*.jsonl
+matches*.jsonl
+matches_contaminated.json
+!results/*.jsonl

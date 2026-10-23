@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鬥地主牌桌</title>
+<style>
+:root{--bg:#f4f1ea;--panel:#fffdf8;--ink:#23201b;--mute:#7a7366;--line:#dcd5c6;--accent:#2f6f4f;--warn:#b4442b;--card:#fff;--sel:#ffe8a3;--bot:#e8e2d3}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1c1a;--panel:#252622;--ink:#ece8dd;--mute:#a39d8e;--line:#3b3c37;--accent:#5fb98a;--warn:#e07a5f;--card:#2d2e2a;--sel:#6b5a1e;--bot:#33342f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,"Noto Sans TC","Microsoft JhengHei",sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px;color:var(--mute);font-weight:600}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin:12px 0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+select,input,textarea,button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 10px}
+button{cursor:pointer}button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button:disabled{opacity:.4;cursor:not-allowed}
+textarea{width:100%;min-height:54px}
+.seats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.seat{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--bot);min-height:92px}
+.seat.turn{outline:2px solid var(--accent)}.seat.me{background:var(--card)}
+.seat b{display:block}.mute{color:var(--mute);font-size:13px}
+.last{font:600 17px ui-monospace,Consolas,monospace;margin-top:4px;word-break:break-all}
+.hand{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.c{min-width:38px;padding:10px 6px;text-align:center;font:600 16px ui-monospace,Consolas,monospace;border-radius:6px;border:1px solid var(--line);background:var(--card);user-select:none}
+.c.sel{background:var(--sel);transform:translateY(-8px)}
+.log{max-height:170px;overflow:auto;font:13px ui-monospace,Consolas,monospace;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:720px){.grid2,.seats{grid-template-columns:1fr}}
+table{border-collapse:collapse;width:100%;font-size:13px}td,th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left}
+tr.diff td{background:color-mix(in srgb,var(--warn) 14%,transparent)}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;background:var(--bot);font-size:12px}
+.win{color:var(--accent);font-weight:700}.lose{color:var(--warn);font-weight:700}
+label.chk{display:inline-flex;gap:6px;align-items:center;margin-right:14px}
+code{background:var(--bot);padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<main>
+<h1>鬥地主牌桌 <span class="mute" id="status"></span></h1>
+<div class="mute" id="rulebar"><b>只有小c 用 HL 策略；小o 與 Qwen3.6 靠自己的智能解讀規則</b>｜每手思考上限 40 秒，逾時由系統代出保守牌（不用 HL）</div>
+
+<section class="panel" id="live" hidden>
+  <div class="row"><span id="liveTxt"></span><button class="primary" id="liveBtn"></button></div>
+</section>
+
+<section class="panel" id="setup">
+  <h2>開局設定</h2>
+  <div class="row" id="seatSel"></div>
+  <div class="row" style="margin-top:8px">
+    <label>種子 <input id="seed" placeholder="留空 = 隨機" size="12"></label>
+    <button class="primary" id="startBtn">開始新局</button>
+    <span class="mute">座位 0 固定是地主；農民兩人同隊。</span>
+  </div>
+  <div class="mute" style="margin-top:6px">
+    人類 = 你在這個頁面入座；小c本人 = Claude 透過 API 入座；小c策略 = policy.py（下方可調）；rule = RLCard 規則 bot；小o = codex exec（每手約 13～18 秒）；Qwen3.6（vLLM）= 遠端端點，每手約 1 秒。
+  </div>
+</section>
+
+<section class="panel" id="strategyPanel">
+  <details>
+  <summary><b>策略設定</b><span class="mute">（小c 策略與公平原則；即時生效，影響下一手）</span></summary>
+  <div class="grid2" style="margin-top:8px">
+    <div>
+      <b>小c 策略（policy）</b>
+      <div style="margin:6px 0" id="flags"></div>
+      <div id="params"></div>
+      <button id="applyStrat">套用</button> <span class="mute" id="stratMsg"></span>
+    </div>
+    <div>
+      <b>公平原則</b>
+      <div style="margin-top:6px"><b>只有小c 能用 HL 策略；小o 與 Qwen3.6（vLLM）都靠它們自己原本的智能解讀規則來玩。</b></div>
+      <div class="mute" style="margin-top:6px">左邊的旗標與參數只影響「小c策略」座位（policy.py）。小o 與 vLLM 的提示詞只有規則說明、該座位看得到的牌局資訊與合法出牌清單，沒有任何策略提示。「提示」按鈕是給你自己看的小c 策略建議，不會傳給它們。</div>
+      <div class="mute" style="margin-top:6px"><b>每手思考上限 40 秒</b>（小o 與 vLLM 共用）：逾時或回傳非法動作時，由系統代出中性保守牌（能 pass 就 pass，否則出最小單張），<b>不會</b>用 HL 策略代打。</div>
+    </div>
+  </div>
+  </details>
+</section>
+
+<section class="panel" id="table" hidden>
+  <div class="seats" id="seats"></div>
+  <div class="row" style="margin-top:10px"><b>出牌紀錄</b><span class="mute" id="thinking"></span></div>
+  <div class="log" id="log"></div>
+  <div id="mine" hidden>
+    <div class="row" style="margin-top:10px"><b>你的手牌</b><span class="mute" id="turnMsg"></span></div>
+    <div class="hand" id="hand"></div>
+    <div class="row">
+      <button class="primary" id="playBtn" disabled>出牌</button>
+      <button id="passBtn" disabled>不出</button>
+      <button id="clearBtn">清除選擇</button>
+      <button id="hintBtn">提示（小c 策略建議）</button>
+      <span id="selTxt" class="mute"></span><span id="hintTxt"></span>
+    </div>
+    <details style="margin-top:8px"><summary class="mute">合法出牌清單（點一下就選取）</summary><div id="legalList" class="row" style="margin-top:6px"></div></details>
+  </div>
+  <div class="mute" id="spectate" hidden>你不在任何座位上；牌局結束後會出現複盤。</div>
+</section>
+
+<section class="panel" id="replay" hidden>
+  <h2>複盤</h2>
+  <div id="result" style="font-size:17px"></div>
+  <div class="grid2" style="margin-top:8px">
+    <div><b>起手牌（結束後才公開）</b><div id="initial"></div></div>
+    <div><b>各座位統計</b><div id="per"></div></div>
+  </div>
+  <div id="llmstats" class="mute" style="margin:8px 0"></div>
+  <b>逐手紀錄（紅底 = 實際出牌與小c 策略建議不同；「耗時」只列小o／vLLM；橘字 = 逾時由系統代出）</b>
+  <div class="log" id="moves" style="max-height:260px"></div>
+  <div class="mute" style="margin-top:6px" id="saved"></div>
+</section>
+</main>
+
+<script>
+const SEATN=['地主','地主下家','地主上家'];
+const KIND={human:'人類（你）',external:'小c本人（API）',policy:'小c策略',rule:'rule-v1',codex:'小o（codex）',vllm:'Qwen3.6（vLLM）'};
+const RANKS='3456789TJQKA2BR';
+const disp=c=>({T:'10',B:'小王',R:'大王'}[c]||c);
+const dispS=s=>s==='pass'?'不出':[...s].map(disp).join(' ');
+const canon=s=>[...s].sort((a,b)=>RANKS.indexOf(a)-RANKS.indexOf(b)).join('');
+const $=id=>document.getElementById(id);
+let G=null,TOKEN=null,SEAT=null,sel=new Set(),legal=new Set(),polling=null,replayShown=false,lastHand='';
+
+function buildSetup(){
+  const defs=['human','codex','policy'];
+  $('seatSel').innerHTML=[0,1,2].map(i=>`<label>${SEATN[i]} <select id="k${i}">${Object.entries(KIND).map(([k,v])=>`<option value="${k}" ${k===defs[i]?'selected':''}>${v}</option>`).join('')}</select></label>`).join('');
+}
+async function api(path,opt){
+  const r=await fetch(path,opt);const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.detail||r.status);return j;
+}
+async function loadStrategy(){
+  const s=await api('/api/strategy');
+  const fl={go_out:'能一手出完就出',lone_lead:'對手剩 1 張不領單張',save_high:'保留 2／王（農民常常有害）',teammate_pass:'隊友出牌時 pass',endgame_safe:'殘局安全領出（實驗：dev 驗證為變差，勿開）',safe_no_high:'　└ 不領 2／王（診斷用，同樣無效）'};
+  $('flags').innerHTML=Object.entries(s.flags).map(([k,v])=>`<label class="chk"><input type="checkbox" data-f="${k}" ${v?'checked':''}> ${fl[k]||k}</label>`).join('');
+  const pl={save_high_opp_left:'save_high 解除：對手剩 ≤ N 張',save_high_hand_left:'save_high 解除：我剩 ≤ N 張',bomb_opp_left:'對手剩 ≤ N 張才動用炸彈',safe_threat_cards:'殘局安全領出：對手剩 ≤ N 張啟動',safe_tol_pct:'殘局安全領出：容忍 N% 風險差'};
+  $('params').innerHTML=Object.entries(s.params).map(([k,v])=>`<div class="row" style="margin:4px 0"><span style="min-width:230px">${pl[k]||k}</span><input type="number" min="0" max="20" data-p="${k}" value="${v}" style="width:70px"></div>`).join('');
+}
+$('applyStrat').onclick=async()=>{
+  const flags={},params={};
+  document.querySelectorAll('[data-f]').forEach(e=>flags[e.dataset.f]=e.checked);
+  document.querySelectorAll('[data-p]').forEach(e=>params[e.dataset.p]=+e.value);
+  try{await api('/api/strategy',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({flags,params})});
+    $('stratMsg').textContent='已套用 '+new Date().toLocaleTimeString();}catch(e){$('stratMsg').textContent='失敗：'+e.message}
+};
+const newGame=(kinds,seed,force)=>api('/api/new',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({kinds,seed:seed===''?null:+seed,force})});
+$('startBtn').onclick=async()=>{
+  const kinds=[0,1,2].map(i=>$('k'+i).value);
+  const seed=$('seed').value.trim();
+  try{
+    let r;
+    try{r=await newGame(kinds,seed,false)}
+    catch(e){
+      // 伺服器一次只跑一局：有別的局進行中時先確認，避免誤殺（驗證賽曾被不明來源的開局插隊取代）
+      if(String(e.message).includes('進行中')&&confirm(e.message+'\n\n要中止那一局並開新局嗎？'))r=await newGame(kinds,seed,true);
+      else throw e;
+    }
+    G=r;TOKEN=null;SEAT=null;replayShown=false;sel.clear();
+    kinds.forEach((k,i)=>{if(k==='human'&&SEAT===null){SEAT=i;TOKEN=r.tokens[i];}});
+    $('replay').hidden=true;$('table').hidden=false;$('setup').hidden=true;
+    $('mine').hidden=SEAT===null;$('spectate').hidden=SEAT!==null;
+    G.kinds=kinds;
+    try{localStorage.setItem('ddz',JSON.stringify({seat:SEAT,token:TOKEN}))}catch(e){}
+    startPolling();
+  }catch(e){if(!String(e.message).includes('進行中'))alert('開局失敗：'+e.message)}
+};
+// 觀戰／上一局複盤入口：局可能是 API 或其他視窗開的，這個頁面沒有座位 token 也能看公開資訊
+async function checkLive(){
+  if($('setup').hidden)return;   // 已在牌局或複盤畫面就不顯示入口
+  try{
+    const p=await api('/api/public');
+    const who=p.kinds.map((k,i)=>`${SEATN[i]}=${KIND[k]}`).join('、');
+    $('live').hidden=false;
+    if(!p.over){
+      $('liveTxt').textContent=`伺服器上有一局進行中：種子 ${p.seed}，${who}，已出 ${p.trace.length} 手`;
+      $('liveBtn').textContent='觀戰';$('liveBtn').onclick=()=>spectate(p);
+    }else{
+      $('liveTxt').textContent=`上一局已結束：種子 ${p.seed}，${who}`;
+      $('liveBtn').textContent='看複盤';$('liveBtn').onclick=()=>viewReplay();
+    }
+  }catch(e){$('live').hidden=true}
+}
+function spectate(p){
+  G={kinds:p.kinds};SEAT=null;TOKEN=null;replayShown=false;sel.clear();
+  $('replay').hidden=true;$('table').hidden=false;$('setup').hidden=true;$('live').hidden=true;
+  $('mine').hidden=true;$('spectate').hidden=false;startPolling();
+}
+async function viewReplay(){SEAT=null;try{await showReplay();$('replay').scrollIntoView()}catch(e){alert(e.message)}}
+function startPolling(){clearInterval(polling);poll();polling=setInterval(poll,800);}
+async function poll(){
+  try{
+    const v=SEAT!==null?await api(`/api/state?seat=${SEAT}&token=${TOKEN}`):await api('/api/public');
+    render(v);
+    if(v.over&&!replayShown){replayShown=true;clearInterval(polling);showReplay();}
+  }catch(e){$('status').textContent='連線問題：'+e.message}
+}
+function lastPlays(trace){const m={};trace.forEach(([p,a])=>m[p]=a);return m}
+function render(v){
+  const kinds=v.kinds,last=lastPlays(v.trace);
+  $('status').textContent=`種子 ${v.seed}｜${v.over?'已結束':'進行中'}`;
+  $('seats').innerHTML=[0,1,2].map(i=>`<div class="seat ${v.turn===i?'turn':''} ${i===SEAT?'me':''}">
+    <b>${SEATN[i]}${i===0?'（地主）':''} <span class="pill">${KIND[kinds[i]]}</span></b>
+    <span class="mute">剩 ${v.counts[i]} 張${v.thinking===i?'｜思考中…':''}</span>
+    <div class="last">${last[i]===undefined?'':dispS(last[i])}</div></div>`).join('');
+  $('log').innerHTML=v.trace.map(([p,a],k)=>`${String(k+1).padStart(2,'0')} ${SEATN[p]}${p===SEAT?'(你)':''}：${dispS(a)}`).join('<br>');
+  $('log').scrollTop=1e9;
+  $('thinking').textContent=v.thinking!==null&&v.thinking!==undefined?`${SEATN[v.thinking]}（${KIND[kinds[v.thinking]]}）思考中…`:'';
+  if(SEAT!==null&&v.hand!==undefined){
+    legal=new Set(v.legal);
+    if(lastHand!==v.hand){sel.clear();lastHand=v.hand;}
+    renderHand(v.hand);
+    $('turnMsg').textContent=v.over?'牌局結束':(v.my_turn?'輪到你了':'等待其他玩家…');
+    renderLegal(v);updBtn(v);
+  }
+}
+function renderHand(hand){
+  $('hand').innerHTML=[...hand].map((c,i)=>`<div class="c ${sel.has(i)?'sel':''}" data-i="${i}">${disp(c)}</div>`).join('');
+  document.querySelectorAll('#hand .c').forEach(e=>e.onclick=()=>{const i=+e.dataset.i;sel.has(i)?sel.delete(i):sel.add(i);renderHand(lastHand);updBtn()});
+}
+function selStr(){return canon([...sel].map(i=>lastHand[i]).join(''))}
+function updBtn(v){
+  const s=selStr(),ok=legal.has(s),myTurn=legal.size>0;
+  $('playBtn').disabled=!(myTurn&&ok&&s);$('passBtn').disabled=!(myTurn&&legal.has('pass'));
+  $('selTxt').textContent=s?`已選 ${dispS(s)}${myTurn?(ok?'（可出）':'（不是合法出牌）'):''}`:'';
+}
+function renderLegal(v){
+  const arr=[...legal].filter(a=>a!=='pass').sort((a,b)=>a.length-b.length||RANKS.indexOf(a[0])-RANKS.indexOf(b[0])).slice(0,150);
+  $('legalList').innerHTML=arr.map(a=>`<button data-a="${a}">${dispS(a)}</button>`).join('')||'<span class="mute">（不是你的回合）</span>';
+  document.querySelectorAll('#legalList button').forEach(b=>b.onclick=()=>{
+    const need=[...b.dataset.a];sel.clear();const used=new Set();
+    need.forEach(ch=>{for(let i=0;i<lastHand.length;i++){if(lastHand[i]===ch&&!used.has(i)){used.add(i);sel.add(i);break}}});
+    renderHand(lastHand);updBtn();
+  });
+}
+async function send(action){
+  try{await api('/api/move',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({seat:SEAT,token:TOKEN,action})});
+    sel.clear();$('hintTxt').textContent='';poll();}catch(e){alert(e.message)}
+}
+$('playBtn').onclick=()=>send(selStr());$('passBtn').onclick=()=>send('pass');
+$('clearBtn').onclick=()=>{sel.clear();renderHand(lastHand);updBtn()};
+$('hintBtn').onclick=async()=>{try{const h=await api(`/api/hint?seat=${SEAT}&token=${TOKEN}`);$('hintTxt').innerHTML=` 建議：<b>${dispS(h.suggest)}</b>`}catch(e){$('hintTxt').textContent=' '+e.message}};
+
+async function showReplay(){
+  const r=await api('/api/replay');
+  $('replay').hidden=false;
+  const myWin=SEAT===null?null:(SEAT===0?r.landlord_won:!r.landlord_won);
+  $('result').innerHTML=(r.landlord_won?'<span class="win">地主方勝</span>':'<span class="win">農民方勝</span>')+(myWin===null?'':(myWin?'　你贏了':'　<span class="lose">你輸了</span>'));
+  $('initial').innerHTML=r.initial.map((h,i)=>`<div class="mute">${SEATN[i]}（${KIND[r.kinds[i]]}）</div><div style="font-family:ui-monospace,Consolas,monospace;word-break:break-all">${dispS(h)}</div>`).join('');
+  $('per').innerHTML='<table><tr><th>座位</th><th>手數</th><th>pass</th><th>炸彈/王炸</th><th>與策略建議相同</th></tr>'+
+    Object.entries(r.per_seat).map(([s,p])=>`<tr><td>${SEATN[s]}（${KIND[p.kind]}）</td><td>${p.moves}</td><td>${p.passes}</td><td>${p.power}</td><td>${p.agree_policy}/${p.moves}</td></tr>`).join('')+'</table>';
+  const st=r.stats||{},parts=[];
+  if(st.codex_calls||st.fallbacks||st.codex_timeouts)parts.push(`小o：有效 ${st.codex_calls||0}、逾時 ${st.codex_timeouts||0}、系統代出 ${st.fallbacks||0}`);
+  if(st.vllm_calls||st.vllm_fallbacks||st.vllm_timeouts)parts.push(`Qwen3.6：有效 ${st.vllm_calls||0}（思考完成 ${st.vllm_think_ok||0}／直覺 ${st.vllm_instinct||0}）、逾時或錯誤 ${st.vllm_timeouts||0}、系統代出 ${st.vllm_fallbacks||0}`);
+  $('llmstats').textContent=parts.join('　｜　');
+  // 伺服器有標 forced 就用它；舊複盤（沒有這欄，上限當時是 30 秒）才用耗時貼近 30 秒來推斷
+  const llm=m=>m.kind==='codex'||m.kind==='vllm',forced=m=>m.forced!==undefined?m.forced:(m.kind==='codex'&&m.ms>=29500);
+  $('moves').innerHTML='<table><tr><th>#</th><th>座位</th><th>出牌</th><th>策略建議</th><th>耗時</th><th>當時手牌</th></tr>'+
+    r.moves.map(m=>`<tr class="${m.action!==m.suggest?'diff':''}"><td>${m.n}</td><td>${SEATN[m.seat]}</td><td${forced(m)?' style="color:var(--warn);font-weight:700" title="逾時，系統代出保守牌"':''}>${dispS(m.action)}${forced(m)?' ⏱':''}</td><td>${m.suggest?dispS(m.suggest):'-'}</td><td class="mute">${llm(m)?(m.ms/1000).toFixed(1)+'s':''}</td><td class="mute">${dispS(m.hand)}</td></tr>`).join('')+'</table>';
+  $('saved').innerHTML=`複盤已存成 <code>replays/*.json</code>，可以叫小c 讀它並解讀；策略參數快照：<code>${JSON.stringify(r.strategy.flags)} ${JSON.stringify(r.strategy.params)}</code>　<button id="againBtn">再來一局</button>`;
+  $('againBtn').onclick=()=>{$('setup').hidden=false;$('table').hidden=true;$('replay').hidden=true;window.scrollTo(0,0);checkLive()};
+}
+async function resume(){
+  // 重新整理後接回進行中的牌局（token 存在 localStorage）
+  try{
+    const s=JSON.parse(localStorage.getItem('ddz')||'null');
+    if(!s||s.seat===null)return;
+    const v=await api(`/api/state?seat=${s.seat}&token=${s.token}`);
+    if(v.over)return;
+    SEAT=s.seat;TOKEN=s.token;G={kinds:v.kinds};
+    $('setup').hidden=true;$('table').hidden=false;$('mine').hidden=false;startPolling();
+  }catch(e){}
+}
+buildSetup();loadStrategy();resume().then(checkLive);setInterval(checkLive,4000);
+</script>
+</body>
+</html>
