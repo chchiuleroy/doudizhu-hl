@@ -1,12 +1,14 @@
-// 積分底分校準：同級 NPC 三人對打，逐局套用計分，量地主每局期望得分；並解出讓期望=0 的 L（W 固定、k=SCORE_K）。
+// 積分底分校準：同級 NPC 三人對打，逐局套用計分（剩牌用牌面價值），量地主每局期望得分；
+// 並解出讓期望=0 的 L（W 固定為目前值），再用同一批逐局資料 bootstrap「整場賽局」的長度。
 // 用法：node tests/calibrate_scoring.js <easy|hard|expert> <局數> [起始種子=1]
 //   expert 每局約 2.5 秒（取樣 20，與重現 docs/SCORING.md 的設定相同），建議開多個行程各跑一段種子。
-// 輸出一行 JSON：n、p（地主勝率）、E_L（以目前 SCORE_BASE 逐局算出的地主每局期望得分與 95% 區間）、L_star（讓期望=0 的 L，W 用目前值）。
+// 輸出一行 JSON：p（地主勝率）、rF／rL（地主贏時每位農民平均剩牌價值／地主輸時地主平均剩牌價值）、
+//   E_L（以目前 SCORE_BASE 逐局算出的地主每局期望得分與 95% 區間）、L_star（讓期望=0 的 L）、match（整場長度中位數與 p10／p90）。
 const fs = require('fs'), path = require('path'), vm = require('vm');
 const html = fs.readFileSync(process.env.DDZ_HTML || path.join(__dirname, '..', 'index.html'), 'utf-8');
 const T = {};
 vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], { __TEST__: T, console, Date });
-const { RULES, SCORE_K, SCORE_BASE, settle, makeGame, makeRng, npcMove, expertMove, farmersWin } = T;
+const { RULES, SCORE_BASE, START_CHIPS, settle, handValue, makeGame, makeRng, npcMove, expertMove, farmersWin } = T;
 
 function selfPlay(level, seed) {
   const G = makeGame({ seed, me: null, level: level === 'expert' ? 'hard' : level });   // 搜尋型 NPC 的底層規則同「標準」；結算用 level
@@ -16,7 +18,34 @@ function selfPlay(level, seed) {
     if (level === 'expert') expertMove(G, G.turn, { rand, samples: 20, budgetMs: 1e9, minSamples: 20 });
     else npcMove(G, G.turn);
   }
-  return { landlordWon: !farmersWin(G), counts: G.hands.map(h => h.length) };
+  return { landlordWon: !farmersWin(G), values: G.hands.map(handValue) };
+}
+const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+function matchLengths(level, games, trials, seed) {      // 每局從逐局資料抽一局，隨機指定哪位玩家當地主；首位 ≤0 即止
+  const rand = makeRng(seed), lens = []; let multi = 0;
+  for (let t = 0; t < trials; t++) {
+    const chips = [START_CHIPS, START_CHIPS, START_CHIPS]; let n = 0;
+    while (chips.every(c => c > 0) && n < 20000) {
+      const g = games[Math.floor(rand() * games.length)], d = settle(level, g.values, g.landlordWon).deltas, land = Math.floor(rand() * 3);
+      for (let s = 0; s < 3; s++) chips[(land + s) % 3] += d[s];
+      n++;
+    }
+    lens.push(n); if (chips.filter(c => c <= 0).length > 1) multi++;
+  }
+  lens.sort((a, b) => a - b);
+  const q = f => lens[Math.min(lens.length - 1, Math.floor(f * lens.length))];
+  return { median: q(0.5), p10: q(0.1), p90: q(0.9), multiBankruptFrac: +(multi / trials).toFixed(3) };
+}
+function summarize(level, games, trials = 2000) {
+  const W = games.filter(g => g.landlordWon), Lo = games.filter(g => !g.landlordWon);
+  const p = W.length / games.length, rF = mean(W.map(g => (g.values[1] + g.values[2]) / 2)), rL = mean(Lo.map(g => g.values[0]));
+  const d = games.map(g => settle(level, g.values, g.landlordWon).deltas[0]), m = mean(d);
+  const sd = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / (d.length - 1));
+  const b = SCORE_BASE[level];
+  const Lstar = p * (b.W + rF) / (1 - p) - rL;           // 令 p(W+rF) = (1−p)(L+rL)
+  return { level, n: games.length, p: +p.toFixed(4), rF: +rF.toFixed(2), rL: +rL.toFixed(2),
+           E_L: +m.toFixed(3), ci95: +(1.96 * sd / Math.sqrt(d.length)).toFixed(3), sd: +sd.toFixed(1), L_star: +Lstar.toFixed(1),
+           base: b, startChips: START_CHIPS, match: matchLengths(level, games, trials, 20261125) };
 }
 function calibrate(level, n, start) {
   RULES.suit = true;
@@ -24,18 +53,7 @@ function calibrate(level, n, start) {
   for (let s = start; s < start + n; s++) games.push(selfPlay(level, s));
   return summarize(level, games);
 }
-function summarize(level, games) {
-  const d = games.map(g => settle(level, g.counts, g.landlordWon).deltas[0]);
-  const m = d.reduce((a, b) => a + b, 0) / d.length;
-  const sd = Math.sqrt(d.reduce((a, b) => a + (b - m) ** 2, 0) / (d.length - 1));
-  // E_L 對 L 是線性的：用 L=0 與 L=1 兩點內插解 L*
-  const evAt = L => games.reduce((a, g) => a + settle(level, g.counts, g.landlordWon).deltas[0] + (g.landlordWon ? 0 : 2 * (SCORE_BASE[level].L - L)), 0) / games.length;
-  const e0 = evAt(0), e1 = evAt(1);
-  return { level, n: games.length, p: +(games.filter(g => g.landlordWon).length / games.length).toFixed(4),
-           E_L: +m.toFixed(3), ci95: +(1.96 * sd / Math.sqrt(d.length)).toFixed(3), L_star: +(e0 / (e0 - e1)).toFixed(2),
-           base: SCORE_BASE[level], k: SCORE_K };
-}
-module.exports = { calibrate, summarize };
+module.exports = { calibrate, summarize, selfPlay, matchLengths };
 if (require.main === module) {
   const [level, n, start] = [process.argv[2], +process.argv[3], +(process.argv[4] || 1)];
   if (!SCORE_BASE[level] || !n) { console.error('用法：node tests/calibrate_scoring.js <easy|hard|expert> <局數> [起始種子]'); process.exit(2); }

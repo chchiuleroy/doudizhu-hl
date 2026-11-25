@@ -100,6 +100,13 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .settle tr.me td{background:color-mix(in srgb,var(--gold) 16%,transparent)}
 .pos{color:var(--accent)}.neg{color:var(--warn)}
 .totalline{font-size:13px;margin:4px 0 2px}
+.chipbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+.chip{display:inline-flex;align-items:baseline;gap:6px;padding:3px 12px;border-radius:99px;background:var(--panel);border:1px solid var(--line);font-size:13px}
+.chip b{font-variant-numeric:tabular-nums;font-size:15px}
+.chip.me{border-color:var(--gold)}
+.chip.low b{color:var(--warn)}
+#matchBox{margin:10px 0 4px;padding:12px;border-radius:12px;background:var(--panel);border:1px solid var(--line);font-size:14px}
+.endbanner{margin:10px 0 4px;padding:10px;border-radius:12px;background:color-mix(in srgb,var(--warn) 14%,var(--panel));border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));text-align:left;font-size:14px}
 dialog{border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);max-width:560px;width:calc(100% - 28px);padding:18px}
 dialog::backdrop{background:rgba(0,0,0,.5)}
 dialog h3{margin:0 0 8px}
@@ -155,16 +162,18 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
   </section>
 
   <div id="summary"></div>
+  <div id="matchBox" hidden></div>
   <button class="btn primary" id="goBtn">開始遊戲</button>
+  <button class="btn ghost" id="newMatchBtn" hidden style="width:100%;margin-top:8px">放棄這場，開新賽局</button>
   <div class="row" style="display:flex;gap:10px;justify-content:space-between;margin-top:12px;align-items:center">
     <span class="mute" id="statsLine"></span>
     <button class="btn ghost" id="rulesBtn1">規則與計分</button>
   </div>
   <div class="row" style="display:flex;gap:10px;justify-content:space-between;margin-top:6px;align-items:center">
     <span class="mute" id="scoreLine"></span>
-    <button class="btn ghost" id="resetScore">清除積分</button>
+    <button class="btn ghost" id="resetScore">清除紀錄</button>
   </div>
-  <div class="mute" style="margin-top:14px;text-align:center;font-size:12px">版本 20261125a</div>
+  <div class="mute" style="margin-top:14px;text-align:center;font-size:12px">版本 20261125b</div>
 </main>
 
 <!-- ============ 牌桌 ============ -->
@@ -172,11 +181,11 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
   <div class="top">
     <span class="badge" id="meBadge"></span>
     <span class="badge" id="suitBadge"></span>
-    <span class="badge" id="scoreBadge" hidden></span>
     <span class="grow"></span>
     <button class="btn ghost" id="rulesBtn2">規則</button>
     <button class="btn ghost" id="menuBtn">回選單</button>
   </div>
+  <div class="chipbar" id="chipBar" hidden></div>
   <div class="felt">
     <div class="row3">
       <div class="seat" id="seatL"></div>
@@ -209,7 +218,7 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
     <div id="resScore"></div>
     <div class="rest" id="resRest"></div>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px">
-      <button class="btn primary" id="againBtn">再來一局</button>
+      <button class="btn primary" id="againBtn">下一局</button>
       <button class="btn" id="resMenuBtn">回選單</button>
     </div>
   </div>
@@ -231,14 +240,16 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
   <p><b>點數大小</b>：3 &lt; 4 &lt; … &lt; K &lt; A &lt; 2 &lt; 小王 &lt; 大王</p>
   <p><b>花色大小</b>：<span class="suits">♠ &gt; ♥ &gt; ♦ &gt; ♣</span><br><span class="mute">開啟時，同點數的同牌型可以用較大花色壓過（例如 ♥7 可被 ♠7 壓過；對子看較大的那張花色）。順子、連對等連續牌型比最高那一張。點數優先於花色。</span></p>
   <p class="mute">跟牌必須同牌型且張數相同並更大；炸彈可壓任何非炸彈；王炸最大。兩人連續不出，由最後出牌者重新領出。</p>
-  <h3 style="margin-top:14px">計分（零和）</h3>
-  <div class="mute">每位<b>輸家</b>付給贏家：<b>身分底分 ＋ 自己剩下的牌數（每張 1 分）</b>。三人本局總和永遠為 0。</div>
+  <h3 style="margin-top:14px">計分與賽局</h3>
+  <div class="mute">每位<b>輸家</b>付給贏家：<b>身分底分 ＋ 自己剩下的牌的價值</b>。三人本局總和永遠為 0。</div>
   <table>
-    <tr><td>地主贏</td><td>兩位農民各付 <b>W ＋ 自己剩牌數</b>；地主收兩筆</td></tr>
-    <tr><td>農民贏</td><td>地主付兩位農民各 <b>L ＋ 地主剩牌數</b>；兩位農民<b>同分</b>（團隊勝負，夥伴剩幾張都不影響）</td></tr>
+    <tr><td>牌的價值</td><td>3–10 照牌面，J＝11、Q＝12、K＝13、A＝14、2＝15、小王＝16、大王＝17（大牌留在手上扣得多）</td></tr>
+    <tr><td>地主贏</td><td>兩位農民各付 <b>W ＋ 自己剩牌價值</b>；地主收兩筆</td></tr>
+    <tr><td>農民贏</td><td>地主付兩位農民各 <b>L ＋ 地主剩牌價值</b>；兩位農民<b>同分</b>（團隊勝負，夥伴剩什麼都不影響）</td></tr>
   </table>
   <table id="baseTable"><tr><th>NPC 難度</th><th>W（地主贏）</th><th>L（農民贏）</th></tr></table>
-  <p class="mute">沒有叫牌、身分由你自選，所以兩個身分的期望得分要大致相當，才不會永遠選同一邊。W、L 是用「同級 NPC 三人對打」的數千局結果校準出來的：該級電腦互打時，地主與農民的平均每局得分都接近 0。<b>這不代表真人也公平</b>——你比電腦強或弱，某一邊就會比較賺。各難度的積分分開累計。炸彈與春天不另外加倍（輸家完全沒出牌時，剩牌分本來就最高）。</p>
+  <p><b>賽局</b>：你、電腦甲、電腦乙各 <span id="startChips"></span> 籌碼，每局依上面規則增減。<b>只要有人籌碼 ≤ 0，整場立即結束</b>（付款不封頂，所以可能是負的；同一局有兩人以上跌到 0 以下，都算破產）。依最終籌碼排名，同分並列。難度整場固定；中途回選單可以繼續，也可以放棄開新賽局。重新整理頁面只會丟掉「正在打的那一局」，已結算的籌碼會保留。</p>
+  <p class="mute">沒有叫牌、身分由你自選，所以兩個身分的期望得分要大致相當，才不會永遠選同一邊。W、L 是用「同級 NPC 三人對打」的數千局結果校準出來的：該級電腦互打時，地主與農民的平均每局得分都接近 0。<b>這不代表真人也公平</b>——你比電腦強或弱，某一邊就會比較賺。炸彈與春天不另外加倍（輸家完全沒出牌時，剩牌價值本來就最高）。</p>
   <form method="dialog"><button class="btn primary">關閉</button></form>
 </dialog>
 
@@ -520,27 +531,50 @@ function npcMove(G, seat) {
 }
 function farmersWin(G) { return G.over && G.winner !== G.landlord; }
 
-/* ---------- 積分制（零和） ----------
- * 每位「輸家」付給贏家：身分底分 ＋ 剩牌數 × SCORE_K。
- *   地主贏：兩位農民各自付 W ＋ 自己剩牌數（地主收兩筆）。
- *   農民贏：地主付給兩位農民各 L ＋ 地主剩牌數（兩位農民同分；夥伴剩幾張都不影響，團隊勝負）。
+/* ---------- 積分制（零和）＋賽局（籌碼） ----------
+ * 每位「輸家」付給贏家：身分底分 ＋ 自己剩下的牌的「牌面價值」總和。
+ *   牌面價值：3–10 照牌面、J11、Q12、K13、A14、2＝15、小王 16、大王 17（引擎內 r＋3）。
+ *   地主贏：兩位農民各自付 W ＋ 自己剩牌價值（地主收兩筆）。
+ *   農民贏：地主付給兩位農民各 L ＋ 地主剩牌價值（兩位農民同分；夥伴剩什麼都不影響，團隊勝負）。
  * 底分 W／L 依 NPC 級別各一組，由 tests/calibrate_scoring.js 用「同級 NPC 三人對打」的逐局結果解出，
  * 使該級自我對弈下地主（也因零和而農民）的每局期望得分≈0。沒有叫牌階段、身分由玩家自選，
- * 若某身分期望較高就永遠選它；這組不對稱底分就是用來抵消這件事。依據與限度見 docs/SCORING.md。 */
-const SCORE_K = 1;
-const SCORE_BASE = { easy: { W: 2, L: 2 }, hard: { W: 2, L: 20 }, expert: { W: 2, L: 2 } };
-function settle(level, handCounts, landlordWon) {   // handCounts[seat] ＝終局各座位剩牌數；回傳每個座位的得分增減
+ * 若某身分期望較高就永遠選它；這組不對稱底分就是用來抵消這件事。依據與限度見 docs/SCORING.md。
+ * 賽局：三位玩家（你、電腦甲、電腦乙）各 START_CHIPS 籌碼，每局零和增減，付款不封頂、籌碼可為負；
+ * 一局結算完若有人 ≤ 0，整場結束，依最終籌碼排名（同分並列、≤0 者都算破產）。難度整場固定。 */
+const START_CHIPS = 1000;
+const SCORE_BASE = { easy: { W: 100, L: 70 }, hard: { W: 10, L: 165 }, expert: { W: 100, L: 60 } };
+const cardValue = c => c.r + 3;
+const handValue = hand => hand.reduce((a, c) => a + cardValue(c), 0);
+function settle(level, handValues, landlordWon) {   // handValues[seat] ＝終局各座位剩牌價值總和；回傳每個座位的籌碼增減
   const b = SCORE_BASE[level] || SCORE_BASE.hard;
   const deltas = [0, 0, 0], pays = [0, 0, 0];       // pays[seat]：該座位這一筆「付出／收到」的點數
   if (landlordWon) {
-    for (const s of [1, 2]) { pays[s] = b.W + SCORE_K * handCounts[s]; deltas[s] = -pays[s]; deltas[0] += pays[s]; }
+    for (const s of [1, 2]) { pays[s] = b.W + handValues[s]; deltas[s] = -pays[s]; deltas[0] += pays[s]; }
   } else {
-    const g = b.L + SCORE_K * handCounts[0];
+    const g = b.L + handValues[0];
     pays[0] = g; deltas[1] = deltas[2] = g; deltas[0] = -2 * g;
   }
   return { landlordWon, base: landlordWon ? b.W : b.L, deltas, pays };
 }
-function settleGame(G) { return settle(G.level, G.hands.map(h => h.length), !farmersWin(G)); }
+function settleGame(G) { return settle(G.level, G.hands.map(handValue), !farmersWin(G)); }
+
+/* 玩家 0＝你、1＝電腦甲、2＝電腦乙。你坐在 me 座位，其餘座位由電腦依座位順序填入；甲乙先後每局輪替（避免永遠同一位當地主） */
+const PLAYER_NAME = ['你', '電腦甲', '電腦乙'];
+function assignSeats(me, gameIdx) {                 // 回傳 playerAtSeat[seat]
+  const npcs = gameIdx % 2 === 0 ? [1, 2] : [2, 1], out = [null, null, null];
+  out[me] = 0;
+  for (let s = 0; s < 3; s++) if (s !== me) out[s] = npcs.shift();
+  return out;
+}
+function newMatch(level) { return { level, chips: [START_CHIPS, START_CHIPS, START_CHIPS], games: 0, over: false }; }
+function applySettlement(match, playerAtSeat, deltas) {   // 一局完整結算後才檢查終局；回傳新物件，不改原物件
+  const chips = match.chips.slice();
+  for (let s = 0; s < 3; s++) chips[playerAtSeat[s]] += deltas[s];
+  return { level: match.level, chips, games: match.games + 1, over: chips.some(c => c <= 0) };
+}
+function rankMatch(chips) {                         // 回傳每位玩家的名次（1 起算；同籌碼並列同名次，其後跳號）
+  return chips.map(c => 1 + chips.filter(x => x > c).length);
+}
 
 /* ---------- 困難 NPC：蒙地卡羅（determinization）搜尋 ----------
  * 只使用該座位「看得到」的資訊：自己的手牌、各家張數、完整出牌紀錄、地主公開底牌、桌面。
@@ -635,7 +669,7 @@ function expertMove(G, seat, opts) {                // 測試與非同步 UI 共
 }
 
 if (typeof __TEST__ !== 'undefined') {
-  Object.assign(__TEST__, { SCORE_K, SCORE_BASE, settle, settleGame, RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
+  Object.assign(__TEST__, { START_CHIPS, SCORE_BASE, cardValue, handValue, settle, settleGame, PLAYER_NAME, assignSeats, newMatch, applySettlement, rankMatch, RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
                             publicInfo, determinize, pimcCandidates, pimcChoose, expertMove, shuffle });
 }
 
@@ -655,18 +689,30 @@ function initUI() {
   };
   Object.assign(S, store.get('ddz_solo_settings', {}));
   let stats = store.get('ddz_solo_stats', { landlord: [0, 0], farmer: [0, 0] });
-  /* 積分：依 NPC 難度分開累計（各難度底分不同，混在一起沒有意義）。L／F＝當地主／當農民 [局數, 得分合計] */
+  /* 賽局：M.cur＝進行中（或剛結束）的賽局；M.hist[難度]＝歷來整場紀錄。換難度＝另開賽局，所以紀錄分難度存 */
   const LEVEL_NAME = { easy: '簡單', hard: '標準', expert: '困難' };
-  const emptyScore = () => ({ g: 0, total: 0, L: [0, 0], F: [0, 0] });
-  let score = store.get('ddz_solo_score', {});
-  const myScore = lv => score[lv] || (score[lv] = emptyScore());
+  const MKEY = 'ddz_solo_match_v2';
+  const okMatch = m => !!m && !!LEVEL_NAME[m.level] && Array.isArray(m.chips) && m.chips.length === 3 && m.chips.every(Number.isInteger)
+    && Number.isInteger(m.games) && m.games >= 0 && typeof m.over === 'boolean';
+  const okHist = h => !!h && ['m', 'first', 'bust', 'games'].every(k => Number.isInteger(h[k]) && h[k] >= 0);
+  let M = store.get(MKEY, { cur: null, hist: {} });                   // localStorage 可能被改壞：逐項驗證，不合格就丟掉該項
+  if (!M || typeof M !== 'object' || Array.isArray(M) || !M.hist || typeof M.hist !== 'object') M = { cur: null, hist: {} };
+  if (!okMatch(M.cur)) M.cur = null;
+  Object.keys(M.hist).forEach(lv => { if (!LEVEL_NAME[lv] || !okHist(M.hist[lv])) delete M.hist[lv]; });
+  const saveM = () => store.set(MKEY, M);
+  const liveMatch = () => (M.cur && !M.cur.over ? M.cur : null);
+  const histOf = lv => M.hist[lv] || (M.hist[lv] = { m: 0, first: 0, bust: 0, games: 0 });
   const fmt = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
-  const avg = ([n, s]) => n ? (s / n).toFixed(1).replace('-', '−') : '—';
+  const chipStr = n => (n < 0 ? '−' : '') + Math.abs(n);
+  function chipsHtml(match) {                           // 三位玩家的籌碼；≤ 20% 起始籌碼標紅
+    return [0, 1, 2].map(p => `<span class="chip ${p === 0 ? 'me' : ''} ${match.chips[p] <= START_CHIPS * 0.2 ? 'low' : ''}">${PLAYER_NAME[p]} <b>${chipStr(match.chips[p])}</b></span>`).join('');
+  }
   ['easy', 'hard', 'expert'].forEach(lv => {            // 規則視窗的底分表：直接讀引擎常數，不另外寫死一份
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${LEVEL_NAME[lv]}</td><td>${SCORE_BASE[lv].W}</td><td>${SCORE_BASE[lv].L}</td>`;
     $('baseTable').appendChild(tr);
   });
+  $('startChips').textContent = START_CHIPS;
 
   /* ---- 開始畫面 ---- */
   function pressGroup(id, key) {
@@ -677,8 +723,14 @@ function initUI() {
     });
   }
   function refreshStart() {
+    const live = S.mode === 'solo' ? liveMatch() : null;       // 進行中的賽局：難度整場固定
+    if (live) S.level = live.level;
     pressGroup('modeChoices', 'mode'); pressGroup('roleChoices', 'role');
     pressGroup('seatChoices', 'seatPick'); pressGroup('levelChoices', 'level');
+    $('levelChoices').querySelectorAll('.choice').forEach(b => { b.disabled = !!live; });
+    $('matchBox').hidden = !live; $('newMatchBtn').hidden = !live;
+    if (live) $('matchBox').innerHTML = `<b>賽局進行中</b>（${LEVEL_NAME[live.level]}，已打 ${live.games} 局）<div class="chipbar" style="margin:8px 0 0">${chipsHtml(live)}</div><div class="mute" style="margin-top:6px">難度整場固定；任何人籌碼 ≤ 0 即結束。想換難度請先放棄這場。</div>`;
+    $('goBtn').textContent = live ? '繼續賽局' : (S.mode === 'solo' ? '開始新賽局' : '開始觀戰');
     $('roleStep').hidden = S.mode === 'spectate';
     $('seatWrap').hidden = S.role !== 'farmer';
     $('suitRule').checked = !!S.suit;
@@ -690,13 +742,17 @@ function initUI() {
       $('summary').innerHTML = `你是 <b>🌾 農民</b>（${sp}）；NPC（${lv}）補上 <b>地主</b> 與 <b>另一位農民</b>。`;
     }
     $('statsLine').textContent = `戰績　地主 ${stats.landlord[0]} 勝 ${stats.landlord[1]} 敗｜農民 ${stats.farmer[0]} 勝 ${stats.farmer[1]} 敗`;
-    const sc = score[S.level] || emptyScore(), b = SCORE_BASE[S.level] || SCORE_BASE.hard;
-    $('scoreLine').textContent = `積分（${lv}）　累計 ${fmt(sc.total)}（${sc.g} 局）｜當地主平均 ${avg(sc.L)}／當農民平均 ${avg(sc.F)}｜底分 W${b.W}・L${b.L}`;
+    const h = M.hist[S.level] || { m: 0, first: 0, bust: 0, games: 0 }, b = SCORE_BASE[S.level] || SCORE_BASE.hard;
+    $('scoreLine').textContent = `賽局紀錄（${lv}）　${h.m} 場，第一名 ${h.first} 次、被淘汰 ${h.bust} 次，共 ${h.games} 局｜底分 W${b.W}・L${b.L}`;
     store.set('ddz_solo_settings', S);
   }
   $('resetScore').onclick = () => {
-    if (!confirm('清除所有難度的累計積分？（勝敗戰績不受影響）')) return;
-    score = {}; store.set('ddz_solo_score', score); refreshStart();
+    if (!confirm('清除所有賽局紀錄，並放棄進行中的賽局？（勝敗戰績不受影響）')) return;
+    M = { cur: null, hist: {} }; saveM(); refreshStart();
+  };
+  $('newMatchBtn').onclick = () => {
+    if (!confirm('放棄目前這場賽局？（不計入紀錄）')) return;
+    M.cur = null; saveM(); refreshStart();
   };
   $('suitRule').onchange = e => { S.suit = e.target.checked; refreshStart(); };
 
@@ -705,6 +761,10 @@ function initUI() {
     RULES.suit = opts.suit;
     token++; clearTimeout(timer);
     G = makeGame({ seed: opts.seed, me: opts.me, level: opts.level });
+    if (opts.me !== null) {                                  // 單人遊玩＝賽局的一局；觀戰不計籌碼
+      if (!liveMatch() || M.cur.level !== opts.level) { M.cur = newMatch(opts.level); saveM(); }
+      G.players = assignSeats(opts.me, M.cur.games);
+    } else G.players = null;
     sel = new Set(); hintSet = null;
     $('start').hidden = true; $('game').hidden = false; $('result').hidden = true;
     render(); schedule();
@@ -745,7 +805,7 @@ function initUI() {
 
   function seatBox(el, seat, turn) {
     const n = G.hands[seat].length, isMe = seat === G.me;
-    const who = isMe ? '你' : (G.me === null ? '電腦·' + ['地主', '下家', '上家'][seat] : '電腦');
+    const who = G.players ? PLAYER_NAME[G.players[seat]] : (G.me === null ? '電腦·' + ['地主', '下家', '上家'][seat] : '電腦');
     el.className = 'seat' + (turn === seat && !G.over ? ' turn' : '');
     el.innerHTML = `<div class="nm"><span>${seat === 0 ? '👑' : '🌾'}</span><span>${who}</span><span class="role">${roleName(seat)}</span></div>
       <div class="cnt"></div>`;
@@ -768,8 +828,8 @@ function initUI() {
     const right = (view + 1) % 3, left = (view + 2) % 3;
     $('meBadge').textContent = G.me === null ? '觀戰中' : `你是 ${G.me === 0 ? '👑 地主' : '🌾 農民（' + seatName(G.me) + '）'}`;
     $('suitBadge').textContent = RULES.suit ? '花色 ♠>♥>♦>♣ 開啟' : '花色規則 關閉';
-    $('scoreBadge').hidden = G.me === null;
-    $('scoreBadge').textContent = `積分（${LEVEL_NAME[G.level] || ''}）${fmt(myScore(G.level).total)}`;
+    $('chipBar').hidden = !G.players || !M.cur;
+    if (G.players && M.cur) $('chipBar').innerHTML = chipsHtml(M.cur);
     $('legend').textContent = RULES.suit ? '同點數時比花色：♠ > ♥ > ♦ > ♣（點數優先於花色）' : '同點數不能互壓';
     seatBox($('seatL'), left, G.turn); seatBox($('seatR'), right, G.turn);
     $('bottomRow').innerHTML = ''; $('bottomRow').appendChild(miniRow(G.bottom, 'sm'));
@@ -861,23 +921,35 @@ function initUI() {
 
   /* ---- 結算 ---- */
   function renderSettlement() {                           // 顯示算式，不只顯示結果；解釋「為什麼是這個數字」
-    const st = settleGame(G), cnt = G.hands.map(h => h.length), b = SCORE_BASE[G.level] || SCORE_BASE.hard;
-    const who = s => seatName(s) + (s === G.me ? '（你）' : G.me === null ? '' : '（電腦）');
-    const rows = [0, 1, 2].map(s => {
-      let note;
-      if (st.landlordWon) note = s === 0 ? '收兩位農民的款' : `剩 ${cnt[s]} 張：付 ${b.W}＋${cnt[s]} ＝ ${st.pays[s]}`;
-      else note = s === 0 ? `剩 ${cnt[0]} 張：每位農民 ${b.L}＋${cnt[0]} ＝ ${st.pays[0]}，付兩份` : `收 ${b.L}＋${cnt[0]} ＝ ${st.pays[0]}`;
-      const d = st.deltas[s];
-      return `<tr class="${s === G.me ? 'me' : ''}"><td>${who(s)}</td><td>${note}</td><td class="num ${d > 0 ? 'pos' : 'neg'}">${fmt(d)}</td></tr>`;
-    }).join('');
-    let html = `<table class="settle"><tr><th>座位</th><th>算式（${LEVEL_NAME[G.level]}）</th><th>本局</th></tr>${rows}</table>`;
-    if (G.me !== null) {
-      const sc = myScore(G.level), d = st.deltas[G.me], k = G.me === 0 ? 'L' : 'F';
-      if (!G.scored) { G.scored = true; sc.g++; sc.total += d; sc[k][0]++; sc[k][1] += d; store.set('ddz_solo_score', score); }   // 同一局只記一次
-      html += `<div class="totalline">你的累計積分（${LEVEL_NAME[G.level]}）：<b>${fmt(sc.total)}</b>（${sc.g} 局）</div>`;
+    const st = settleGame(G), vals = G.hands.map(handValue), cnt = G.hands.map(h => h.length), b = SCORE_BASE[G.level] || SCORE_BASE.hard;
+    if (G.players && !G.scored && M.cur) {                // 同一局只記一次（先於顯示：顯示要用結算後的籌碼）
+      G.scored = true;
+      G.after = applySettlement(M.cur, G.players, st.deltas);
+      M.cur = G.after;
+      if (G.after.over) {
+        const h = histOf(G.level), rk = rankMatch(G.after.chips);
+        h.m++; h.games += G.after.games; if (rk[0] === 1) h.first++; if (G.after.chips[0] <= 0) h.bust++;
+      }
+      saveM();
     }
+    const rows = [0, 1, 2].map(s => {
+      const v = `剩 ${cnt[s]} 張（價值 ${vals[s]}）`;
+      let note;
+      if (st.landlordWon) note = s === 0 ? '收兩位農民的款' : `${v}：付 ${b.W}＋${vals[s]} ＝ ${st.pays[s]}`;
+      else note = s === 0 ? `${v}：每位農民 ${b.L}＋${vals[0]} ＝ ${st.pays[0]}，付兩份` : `收 ${b.L}＋${vals[0]} ＝ ${st.pays[0]}`;
+      const d = st.deltas[s], who = seatName(s) + (G.players ? `（${PLAYER_NAME[G.players[s]]}）` : '');
+      const after = G.after ? `<td class="num">${chipStr(G.after.chips[G.players[s]])}</td>` : '';
+      return `<tr class="${s === G.me ? 'me' : ''}"><td>${who}</td><td>${note}</td><td class="num ${d > 0 ? 'pos' : 'neg'}">${fmt(d)}</td>${after}</tr>`;
+    }).join('');
+    let html = '';
+    if (G.after && G.after.over) {                         // 賽局結束：依最終籌碼排名，≤0 者標破產
+      const rk = rankMatch(G.after.chips), order = [0, 1, 2].sort((a, b2) => G.after.chips[b2] - G.after.chips[a] || a - b2);
+      html += `<div class="endbanner"><b>賽局結束</b>（共 ${G.after.games} 局）<br>${order.map(p => `第 ${rk[p]} 名　${PLAYER_NAME[p]}　${chipStr(G.after.chips[p])}${G.after.chips[p] <= 0 ? '　<b class="neg">破產</b>' : ''}`).join('<br>')}</div>`;
+    }
+    html += `<table class="settle"><tr><th>座位</th><th>算式（${LEVEL_NAME[G.level]}）</th><th>本局</th>${G.after ? '<th>籌碼</th>' : ''}</tr>${rows}</table>`;
     $('resScore').innerHTML = html;
-    $('scoreBadge').textContent = `積分（${LEVEL_NAME[G.level] || ''}）${fmt(myScore(G.level).total)}`;   // 頂端徽章同步成結算後的累計
+    $('againBtn').textContent = G.after && G.after.over ? '開新賽局' : '下一局';
+    if (G.players && M.cur) $('chipBar').innerHTML = chipsHtml(M.cur);   // 頂端籌碼列同步成結算後
   }
   function finish() {
     const landlordWon = !farmersWin(G);
