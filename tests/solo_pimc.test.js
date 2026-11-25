@@ -4,7 +4,7 @@ const path = require('path');
 const vm = require('vm');
 const assert = require('assert');
 
-const html = fs.readFileSync(process.env.DDZ_HTML || path.join(__dirname, '..', 'doudizhu_solo.html'), 'utf-8');
+const html = fs.readFileSync(process.env.DDZ_HTML || path.join(__dirname, '..', 'index.html'), 'utf-8');
 const T = {};
 vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], { __TEST__: T, console, Date });
 const { RULES, makeGame, makeRng, npcMove, publicInfo, determinize, pimcCandidates, pimcChoose, expertMove, classify, beats, farmersWin } = T;

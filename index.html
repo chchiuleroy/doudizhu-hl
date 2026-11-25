@@ -92,6 +92,14 @@ button:disabled{opacity:.4;cursor:not-allowed}
 #result h2{margin:0 0 6px;font-size:28px}
 #result .rest{margin:10px 0;text-align:left;font-size:13px}
 #result .rest .minirow{justify-content:flex-start;margin:3px 0}
+#result .box{max-height:100%;overflow:auto}
+.settle{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0 4px;text-align:left}
+.settle td,.settle th{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.settle th{font-weight:600;color:var(--mute);font-size:12px}
+.settle td.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;white-space:nowrap}
+.settle tr.me td{background:color-mix(in srgb,var(--gold) 16%,transparent)}
+.pos{color:var(--accent)}.neg{color:var(--warn)}
+.totalline{font-size:13px;margin:4px 0 2px}
 dialog{border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);max-width:560px;width:calc(100% - 28px);padding:18px}
 dialog::backdrop{background:rgba(0,0,0,.5)}
 dialog h3{margin:0 0 8px}
@@ -150,8 +158,13 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
   <button class="btn primary" id="goBtn">開始遊戲</button>
   <div class="row" style="display:flex;gap:10px;justify-content:space-between;margin-top:12px;align-items:center">
     <span class="mute" id="statsLine"></span>
-    <button class="btn ghost" id="rulesBtn1">規則說明</button>
+    <button class="btn ghost" id="rulesBtn1">規則與計分</button>
   </div>
+  <div class="row" style="display:flex;gap:10px;justify-content:space-between;margin-top:6px;align-items:center">
+    <span class="mute" id="scoreLine"></span>
+    <button class="btn ghost" id="resetScore">清除積分</button>
+  </div>
+  <div class="mute" style="margin-top:14px;text-align:center;font-size:12px">版本 20261125a</div>
 </main>
 
 <!-- ============ 牌桌 ============ -->
@@ -159,6 +172,7 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
   <div class="top">
     <span class="badge" id="meBadge"></span>
     <span class="badge" id="suitBadge"></span>
+    <span class="badge" id="scoreBadge" hidden></span>
     <span class="grow"></span>
     <button class="btn ghost" id="rulesBtn2">規則</button>
     <button class="btn ghost" id="menuBtn">回選單</button>
@@ -192,6 +206,7 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
   <div class="box">
     <h2 id="resTitle"></h2>
     <div id="resSub" class="mute"></div>
+    <div id="resScore"></div>
     <div class="rest" id="resRest"></div>
     <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px">
       <button class="btn primary" id="againBtn">再來一局</button>
@@ -216,6 +231,14 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
   <p><b>點數大小</b>：3 &lt; 4 &lt; … &lt; K &lt; A &lt; 2 &lt; 小王 &lt; 大王</p>
   <p><b>花色大小</b>：<span class="suits">♠ &gt; ♥ &gt; ♦ &gt; ♣</span><br><span class="mute">開啟時，同點數的同牌型可以用較大花色壓過（例如 ♥7 可被 ♠7 壓過；對子看較大的那張花色）。順子、連對等連續牌型比最高那一張。點數優先於花色。</span></p>
   <p class="mute">跟牌必須同牌型且張數相同並更大；炸彈可壓任何非炸彈；王炸最大。兩人連續不出，由最後出牌者重新領出。</p>
+  <h3 style="margin-top:14px">計分（零和）</h3>
+  <div class="mute">每位<b>輸家</b>付給贏家：<b>身分底分 ＋ 自己剩下的牌數（每張 1 分）</b>。三人本局總和永遠為 0。</div>
+  <table>
+    <tr><td>地主贏</td><td>兩位農民各付 <b>W ＋ 自己剩牌數</b>；地主收兩筆</td></tr>
+    <tr><td>農民贏</td><td>地主付兩位農民各 <b>L ＋ 地主剩牌數</b>；兩位農民<b>同分</b>（團隊勝負，夥伴剩幾張都不影響）</td></tr>
+  </table>
+  <table id="baseTable"><tr><th>NPC 難度</th><th>W（地主贏）</th><th>L（農民贏）</th></tr></table>
+  <p class="mute">沒有叫牌、身分由你自選，所以兩個身分的期望得分要大致相當，才不會永遠選同一邊。W、L 是用「同級 NPC 三人對打」的數千局結果校準出來的：該級電腦互打時，地主與農民的平均每局得分都接近 0。<b>這不代表真人也公平</b>——你比電腦強或弱，某一邊就會比較賺。各難度的積分分開累計。炸彈與春天不另外加倍（輸家完全沒出牌時，剩牌分本來就最高）。</p>
   <form method="dialog"><button class="btn primary">關閉</button></form>
 </dialog>
 
@@ -497,6 +520,28 @@ function npcMove(G, seat) {
 }
 function farmersWin(G) { return G.over && G.winner !== G.landlord; }
 
+/* ---------- 積分制（零和） ----------
+ * 每位「輸家」付給贏家：身分底分 ＋ 剩牌數 × SCORE_K。
+ *   地主贏：兩位農民各自付 W ＋ 自己剩牌數（地主收兩筆）。
+ *   農民贏：地主付給兩位農民各 L ＋ 地主剩牌數（兩位農民同分；夥伴剩幾張都不影響，團隊勝負）。
+ * 底分 W／L 依 NPC 級別各一組，由 tests/calibrate_scoring.js 用「同級 NPC 三人對打」的逐局結果解出，
+ * 使該級自我對弈下地主（也因零和而農民）的每局期望得分≈0。沒有叫牌階段、身分由玩家自選，
+ * 若某身分期望較高就永遠選它；這組不對稱底分就是用來抵消這件事。依據與限度見 docs/SCORING.md。 */
+const SCORE_K = 1;
+const SCORE_BASE = { easy: { W: 2, L: 2 }, hard: { W: 2, L: 20 }, expert: { W: 2, L: 2 } };
+function settle(level, handCounts, landlordWon) {   // handCounts[seat] ＝終局各座位剩牌數；回傳每個座位的得分增減
+  const b = SCORE_BASE[level] || SCORE_BASE.hard;
+  const deltas = [0, 0, 0], pays = [0, 0, 0];       // pays[seat]：該座位這一筆「付出／收到」的點數
+  if (landlordWon) {
+    for (const s of [1, 2]) { pays[s] = b.W + SCORE_K * handCounts[s]; deltas[s] = -pays[s]; deltas[0] += pays[s]; }
+  } else {
+    const g = b.L + SCORE_K * handCounts[0];
+    pays[0] = g; deltas[1] = deltas[2] = g; deltas[0] = -2 * g;
+  }
+  return { landlordWon, base: landlordWon ? b.W : b.L, deltas, pays };
+}
+function settleGame(G) { return settle(G.level, G.hands.map(h => h.length), !farmersWin(G)); }
+
 /* ---------- 困難 NPC：蒙地卡羅（determinization）搜尋 ----------
  * 只使用該座位「看得到」的資訊：自己的手牌、各家張數、完整出牌紀錄、地主公開底牌、桌面。
  * 把其他人手上未知的牌隨機分配（多種可能），對每個候選出牌各模擬打完整局（模擬時各方用標準啟發式），
@@ -590,7 +635,7 @@ function expertMove(G, seat, opts) {                // 測試與非同步 UI 共
 }
 
 if (typeof __TEST__ !== 'undefined') {
-  Object.assign(__TEST__, { RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
+  Object.assign(__TEST__, { SCORE_K, SCORE_BASE, settle, settleGame, RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
                             publicInfo, determinize, pimcCandidates, pimcChoose, expertMove, shuffle });
 }
 
@@ -610,6 +655,18 @@ function initUI() {
   };
   Object.assign(S, store.get('ddz_solo_settings', {}));
   let stats = store.get('ddz_solo_stats', { landlord: [0, 0], farmer: [0, 0] });
+  /* 積分：依 NPC 難度分開累計（各難度底分不同，混在一起沒有意義）。L／F＝當地主／當農民 [局數, 得分合計] */
+  const LEVEL_NAME = { easy: '簡單', hard: '標準', expert: '困難' };
+  const emptyScore = () => ({ g: 0, total: 0, L: [0, 0], F: [0, 0] });
+  let score = store.get('ddz_solo_score', {});
+  const myScore = lv => score[lv] || (score[lv] = emptyScore());
+  const fmt = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
+  const avg = ([n, s]) => n ? (s / n).toFixed(1).replace('-', '−') : '—';
+  ['easy', 'hard', 'expert'].forEach(lv => {            // 規則視窗的底分表：直接讀引擎常數，不另外寫死一份
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${LEVEL_NAME[lv]}</td><td>${SCORE_BASE[lv].W}</td><td>${SCORE_BASE[lv].L}</td>`;
+    $('baseTable').appendChild(tr);
+  });
 
   /* ---- 開始畫面 ---- */
   function pressGroup(id, key) {
@@ -633,8 +690,14 @@ function initUI() {
       $('summary').innerHTML = `你是 <b>🌾 農民</b>（${sp}）；NPC（${lv}）補上 <b>地主</b> 與 <b>另一位農民</b>。`;
     }
     $('statsLine').textContent = `戰績　地主 ${stats.landlord[0]} 勝 ${stats.landlord[1]} 敗｜農民 ${stats.farmer[0]} 勝 ${stats.farmer[1]} 敗`;
+    const sc = score[S.level] || emptyScore(), b = SCORE_BASE[S.level] || SCORE_BASE.hard;
+    $('scoreLine').textContent = `積分（${lv}）　累計 ${fmt(sc.total)}（${sc.g} 局）｜當地主平均 ${avg(sc.L)}／當農民平均 ${avg(sc.F)}｜底分 W${b.W}・L${b.L}`;
     store.set('ddz_solo_settings', S);
   }
+  $('resetScore').onclick = () => {
+    if (!confirm('清除所有難度的累計積分？（勝敗戰績不受影響）')) return;
+    score = {}; store.set('ddz_solo_score', score); refreshStart();
+  };
   $('suitRule').onchange = e => { S.suit = e.target.checked; refreshStart(); };
 
   function startGame(opts) {
@@ -705,6 +768,8 @@ function initUI() {
     const right = (view + 1) % 3, left = (view + 2) % 3;
     $('meBadge').textContent = G.me === null ? '觀戰中' : `你是 ${G.me === 0 ? '👑 地主' : '🌾 農民（' + seatName(G.me) + '）'}`;
     $('suitBadge').textContent = RULES.suit ? '花色 ♠>♥>♦>♣ 開啟' : '花色規則 關閉';
+    $('scoreBadge').hidden = G.me === null;
+    $('scoreBadge').textContent = `積分（${LEVEL_NAME[G.level] || ''}）${fmt(myScore(G.level).total)}`;
     $('legend').textContent = RULES.suit ? '同點數時比花色：♠ > ♥ > ♦ > ♣（點數優先於花色）' : '同點數不能互壓';
     seatBox($('seatL'), left, G.turn); seatBox($('seatR'), right, G.turn);
     $('bottomRow').innerHTML = ''; $('bottomRow').appendChild(miniRow(G.bottom, 'sm'));
@@ -795,6 +860,25 @@ function initUI() {
   }
 
   /* ---- 結算 ---- */
+  function renderSettlement() {                           // 顯示算式，不只顯示結果；解釋「為什麼是這個數字」
+    const st = settleGame(G), cnt = G.hands.map(h => h.length), b = SCORE_BASE[G.level] || SCORE_BASE.hard;
+    const who = s => seatName(s) + (s === G.me ? '（你）' : G.me === null ? '' : '（電腦）');
+    const rows = [0, 1, 2].map(s => {
+      let note;
+      if (st.landlordWon) note = s === 0 ? '收兩位農民的款' : `剩 ${cnt[s]} 張：付 ${b.W}＋${cnt[s]} ＝ ${st.pays[s]}`;
+      else note = s === 0 ? `剩 ${cnt[0]} 張：每位農民 ${b.L}＋${cnt[0]} ＝ ${st.pays[0]}，付兩份` : `收 ${b.L}＋${cnt[0]} ＝ ${st.pays[0]}`;
+      const d = st.deltas[s];
+      return `<tr class="${s === G.me ? 'me' : ''}"><td>${who(s)}</td><td>${note}</td><td class="num ${d > 0 ? 'pos' : 'neg'}">${fmt(d)}</td></tr>`;
+    }).join('');
+    let html = `<table class="settle"><tr><th>座位</th><th>算式（${LEVEL_NAME[G.level]}）</th><th>本局</th></tr>${rows}</table>`;
+    if (G.me !== null) {
+      const sc = myScore(G.level), d = st.deltas[G.me], k = G.me === 0 ? 'L' : 'F';
+      if (!G.scored) { G.scored = true; sc.g++; sc.total += d; sc[k][0]++; sc[k][1] += d; store.set('ddz_solo_score', score); }   // 同一局只記一次
+      html += `<div class="totalline">你的累計積分（${LEVEL_NAME[G.level]}）：<b>${fmt(sc.total)}</b>（${sc.g} 局）</div>`;
+    }
+    $('resScore').innerHTML = html;
+    $('scoreBadge').textContent = `積分（${LEVEL_NAME[G.level] || ''}）${fmt(myScore(G.level).total)}`;   // 頂端徽章同步成結算後的累計
+  }
   function finish() {
     const landlordWon = !farmersWin(G);
     let title, sub;
@@ -807,6 +891,7 @@ function initUI() {
       stats[k][meWin ? 0 : 1]++; store.set('ddz_solo_stats', stats);
     }
     $('resTitle').textContent = title; $('resSub').textContent = sub;
+    renderSettlement();
     const rest = $('resRest'); rest.innerHTML = '';
     [0, 1, 2].forEach(s => {
       if (!G.hands[s].length) return;

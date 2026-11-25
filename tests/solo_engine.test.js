@@ -1,10 +1,10 @@
-// 測試 doudizhu_solo.html 內嵌的遊戲引擎（不含 UI）。用法：node tests/solo_engine.test.js
+// 測試 index.html 內嵌的遊戲引擎（不含 UI）。用法：node tests/solo_engine.test.js
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const assert = require('assert');
 
-const html = fs.readFileSync(process.env.DDZ_HTML || path.join(__dirname, '..', 'doudizhu_solo.html'), 'utf-8');   // DDZ_HTML 供突變驗證
+const html = fs.readFileSync(process.env.DDZ_HTML || path.join(__dirname, '..', 'index.html'), 'utf-8');   // DDZ_HTML 供突變驗證
 const m = html.match(/<script>([\s\S]*?)<\/script>/);
 assert(m, '找不到 <script>');
 const T = {};

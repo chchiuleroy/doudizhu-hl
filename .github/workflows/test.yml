@@ -1,0 +1,15 @@
+name: test
+on: [push, pull_request]
+jobs:
+  game-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: 22 }
+      - name: 引擎測試（牌型／花色／整局對打）
+        run: node tests/solo_engine.test.js
+      - name: 積分制測試（結算公式、零和、校準守門）
+        run: node tests/solo_scoring.test.js
+      - name: 困難 NPC 不偷看測試
+        run: node tests/solo_pimc.test.js

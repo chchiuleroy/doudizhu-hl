@@ -6,7 +6,7 @@
 
 | 部分 | 是什麼 | 需要什麼 |
 |---|---|---|
-| [`doudizhu_solo.html`](doudizhu_solo.html) | **單檔離線遊戲**：單人遊玩、NPC 補位、三種難度、花色大小規則 | 一個瀏覽器，雙擊開啟 |
+| [`index.html`](index.html) | **單檔遊戲（可線上玩）**：單人遊玩、NPC 補位、三種難度、花色大小規則、**積分制** | 一個瀏覽器；線上版見下方 |
 | [`policy.py`](policy.py) 等 | **HL 策略研究**：啟發式策略、對 RLCard 規則 bot 的配對評估框架、失敗實驗 | Python 3.13、RLCard |
 | [`server.py`](server.py) + [`static/index.html`](static/index.html) | **網頁牌桌**：人類、規則 bot、HL 策略、Claude（API）、Codex CLI、vLLM 模型同桌對打並複盤 | Python（FastAPI） |
 
@@ -16,7 +16,9 @@
 
 ## 1. 單檔遊戲（最快上手）
 
-用瀏覽器開啟 [`doudizhu_solo.html`](doudizhu_solo.html) 即可，**不需要伺服器、不載入任何外部資源**。
+**線上直接玩：<https://chchiuleroy.github.io/doudizhu-hl/>**（GitHub Pages；純靜態頁面，沒有後端）
+
+或把 [`index.html`](index.html) 下載下來用瀏覽器開啟，**不需要伺服器、不載入任何外部資源**（本機：`python -m http.server 8000` 後開 <http://localhost:8000/>）。
 
 - **流程**：選「單人遊玩」→ 選「地主」或「農民」（農民可選座位）→ 缺的角色由 NPC 補上。也有「觀戰」模式（三位 NPC 對打）。
 - **花色大小**：♠ > ♥ > ♦ > ♣。同點數、同牌型時以較大花色壓過（對子、順子等看最大那張）；**點數永遠優先於花色**。傳統鬥地主花色不分大小，所以這是可以在設定關閉的規則，預設開啟。
@@ -25,6 +27,7 @@
   - **標準**：本專案 HL 啟發式（v2）的 JavaScript 移植。
   - **困難**：蒙地卡羅搜尋（determinization）。只使用該座位看得到的資訊（自己的手牌、各家張數、出牌紀錄、地主公開底牌），隨機分配未知的牌、模擬整局，選勝率最高的一手；每手約 1～2 秒。
 - 規則：54 張牌，地主 20 張（含公開的 3 張底牌）、農民各 17 張；沒有叫牌階段（由你選身分決定誰是地主）。
+- **積分制**（零和）：每位**輸家**付給贏家「身分底分 ＋ 自己剩下的牌數」。地主贏：兩位農民各付 `W＋自己剩牌`；農民贏：地主付兩位農民各 `L＋地主剩牌`（農民同分）。底分依 NPC 難度各一組（簡單 W2／L2、標準 W2／L20、困難 W2／L2），用「同級 NPC 三人對打」的數千局校準到「地主每局期望得分≈0」，避免玩家永遠選較賺的身分。累計積分依難度分開存在瀏覽器。**這是 NPC 對 NPC 的校準，沒有真人數據，不代表真人公平**；地主勝率對 NPC 強度不單調（簡單 40%／標準 68%／困難 37%）。完整推導、數據與限度見 [docs/SCORING.md](docs/SCORING.md)。
 - 網址參數（測試用）：`?auto=1&seed=5&level=easy|hard|expert&spectate=1&fast=1&suit=0&role=farmer`。
 
 ### 引擎測試（Node；以 v22 測試）
@@ -32,6 +35,8 @@
 ```bash
 node tests/solo_engine.test.js   # 牌型辨識、花色規則、合法出牌枚舉、整局 NPC 對打（合法性、牌數守恆）
 node tests/solo_pimc.test.js     # 困難 NPC 的「不偷看」資訊隔離測試、抽樣不變量、合法性
+node tests/solo_scoring.test.js  # 積分制：結算公式、零和、校準守門（簡單／標準級期望≈0）
+node tests/calibrate_scoring.js hard 2000   # 重做底分校準：<easy|hard|expert> <局數> [起始種子]
 node tests/solo_strength.js 1000 25 30   # 困難 vs 標準的強度比較（起始種子 局數 每手樣本數）
 ```
 
@@ -113,7 +118,8 @@ cp .vllm.env.example .vllm.env    # 填入你自己的 VLLM_URL（含 /v1）與 
 ## 專案結構
 
 ```
-doudizhu_solo.html      單檔離線遊戲（引擎＋NPC＋UI）
+index.html              單檔遊戲（引擎＋NPC＋積分制＋UI），GitHub Pages 直接服務
+docs/SCORING.md         積分制設計、校準數據與限度
 policy.py               HL 啟發式策略（v2；v3 實驗旗標預設關閉）
 runner.py compare.py    評估框架（配對比較）
 diagnose.py ablate.py   第一分歧點診斷、消融實驗

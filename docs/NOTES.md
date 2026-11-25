@@ -47,7 +47,7 @@ vLLM 端點：OpenAI 相容 API，設定在 `.vllm.env`（gitignored），用官
 - 小o 逾時會用 `taskkill /T /F` 殺整棵行程樹（codex.cmd 底下是 node，只殺外層會留孤兒行程）。
 - vLLM 兩種模式（`.vllm.env` 的 `VLLM_THINK`）：0 直覺（預設）／1 思考（預算 25 秒、max_tokens 3500；此端點約 145 token/s，簡單殘局也常在 4000 token 內想不完；沒想完就用剩餘時間要一個關閉思考的直覺答案）。
 
-## 單檔單人遊戲 `doudizhu_solo.html`（2026-10-23）
+## 單檔單人遊戲 `index.html`（2026-10-23 建立時名為 `doudizhu_solo.html`；2026-11-25 改名以便 GitHub Pages 直接服務，並加入積分制，見 [SCORING.md](SCORING.md)）
 不需要伺服器，雙擊用瀏覽器開即可（完全離線）。花色大小 ♠ > ♥ > ♦ > ♣（同點數時決勝，可在設定關閉；點數優先於花色）。
 流程：單人遊玩／觀戰 → 選地主或農民（農民可選座位）→ 缺的角色由 NPC 補上 → NPC 難度：簡單／標準（HL v2 啟發式移植）／困難（蒙地卡羅搜尋，每手約 1～2 秒）。
 網址參數（測試用）：`?auto=1&seed=5&level=hard|easy|expert&spectate=1&fast=1&suit=0&role=farmer`。

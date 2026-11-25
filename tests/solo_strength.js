@@ -1,7 +1,7 @@
 // 困難（蒙地卡羅）NPC 對標準 NPC 的強度比較。同種子配對，不設通過門檻，只回報。
 // 用法：node tests/solo_strength.js <起始種子> <局數> [樣本數=30]   （可多開行程平行，結果印成 JSON 行）
 const fs = require('fs'), path = require('path'), vm = require('vm');
-const html = fs.readFileSync(path.join(__dirname, '..', 'doudizhu_solo.html'), 'utf-8');
+const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf-8');
 const T = {};
 vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], { __TEST__: T, console, Date });
 const { RULES, makeGame, makeRng, npcMove, expertMove, farmersWin } = T;

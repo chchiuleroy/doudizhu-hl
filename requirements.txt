@@ -1,4 +1,4 @@
-# Python 3.13（開發與測試所用版本）。單檔遊戲 doudizhu_solo.html 不需要任何依賴。
+# Python 3.13（開發與測試所用版本）。單檔遊戲 index.html 不需要任何依賴。
 rlcard==1.2.0
 setuptools>=80      # rlcard 需要 distutils，Python 3.12+ 要靠 setuptools 補
 numpy>=2.0
