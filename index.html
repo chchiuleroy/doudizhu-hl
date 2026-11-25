@@ -248,7 +248,7 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
     <tr><td>農民贏</td><td>地主付兩位農民各 <b>L ＋ 地主剩牌價值</b>；兩位農民<b>同分</b>（團隊勝負，夥伴剩什麼都不影響）</td></tr>
   </table>
   <table id="baseTable"><tr><th>NPC 難度</th><th>W（地主贏）</th><th>L（農民贏）</th></tr></table>
-  <p><b>賽局</b>：你、電腦甲、電腦乙各 <span id="startChips"></span> 籌碼，每局依上面規則增減。<b>只要有人籌碼 ≤ 0，整場立即結束</b>（付款不封頂，所以可能是負的；同一局有兩人以上跌到 0 以下，都算破產）。依最終籌碼排名，同分並列。難度整場固定；中途回選單可以繼續，也可以放棄開新賽局。重新整理頁面只會丟掉「正在打的那一局」，已結算的籌碼會保留。</p>
+  <p><b>賽局</b>：你、電腦甲、電腦乙各 <span id="startChips"></span> 籌碼，每局依上面規則增減。<b>只要有人籌碼 ≤ 0，整場立即結束</b>（付款不封頂，所以可能是負的；同一局有兩人以上跌到 0 以下，都算破產）。結束後會說明誰是贏家、誰破產，再回到首頁，可以重新選難度與身分。依最終籌碼排名，同分並列。難度整場固定；中途回選單可以繼續，也可以放棄開新賽局。重新整理頁面只會丟掉「正在打的那一局」，已結算的籌碼會保留。</p>
   <p class="mute">沒有叫牌、身分由你自選，所以兩個身分的期望得分要大致相當，才不會永遠選同一邊。W、L 是用「同級 NPC 三人對打」的數千局結果校準出來的：該級電腦互打時，地主與農民的平均每局得分都接近 0。<b>這不代表真人也公平</b>——你比電腦強或弱，某一邊就會比較賺。炸彈與春天不另外加倍（輸家完全沒出牌時，剩牌價值本來就最高）。</p>
   <form method="dialog"><button class="btn primary">關閉</button></form>
 </dialog>
@@ -572,6 +572,11 @@ function applySettlement(match, playerAtSeat, deltas) {   // 一局完整結算�
   for (let s = 0; s < 3; s++) chips[playerAtSeat[s]] += deltas[s];
   return { level: match.level, chips, games: match.games + 1, over: chips.some(c => c <= 0) };
 }
+function matchResult(chips) {                       // 整場結果：名次、冠軍（可並列）、破產者，以及「你」（玩家 0）是贏家／輸家／其他
+  const rank = rankMatch(chips), all = [0, 1, 2];
+  const winners = all.filter(p => rank[p] === 1), bankrupt = all.filter(p => chips[p] <= 0);
+  return { rank, winners, bankrupt, you: bankrupt.includes(0) ? 'loser' : rank[0] === 1 ? 'winner' : 'middle' };
+}
 function rankMatch(chips) {                         // 回傳每位玩家的名次（1 起算；同籌碼並列同名次，其後跳號）
   return chips.map(c => 1 + chips.filter(x => x > c).length);
 }
@@ -669,7 +674,7 @@ function expertMove(G, seat, opts) {                // 測試與非同步 UI 共
 }
 
 if (typeof __TEST__ !== 'undefined') {
-  Object.assign(__TEST__, { START_CHIPS, SCORE_BASE, cardValue, handValue, settle, settleGame, PLAYER_NAME, assignSeats, newMatch, applySettlement, rankMatch, RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
+  Object.assign(__TEST__, { START_CHIPS, SCORE_BASE, cardValue, handValue, settle, settleGame, PLAYER_NAME, assignSeats, newMatch, applySettlement, rankMatch, matchResult, RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
                             publicInfo, determinize, pimcCandidates, pimcChoose, expertMove, shuffle });
 }
 
@@ -704,6 +709,12 @@ function initUI() {
   const histOf = lv => M.hist[lv] || (M.hist[lv] = { m: 0, first: 0, bust: 0, games: 0 });
   const fmt = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
   const chipStr = n => (n < 0 ? '−' : '') + Math.abs(n);
+  function endHtml(match) {                             // 賽局結束的結果：誰是贏家、誰輸（破產）、完整名次
+    const r = matchResult(match.chips), order = [0, 1, 2].sort((a, b) => match.chips[b] - match.chips[a] || a - b);
+    const head = r.you === 'winner' ? '🏆 你是這場賽局的贏家' : r.you === 'loser' ? '你破產了，這場賽局你輸了' : `這場賽局你拿第 ${r.rank[0]} 名`;
+    const win = r.you === 'winner' ? '' : `　贏家：${r.winners.map(p => PLAYER_NAME[p]).join('、')}`;
+    return `<b>${head}</b>${win}（共 ${match.games} 局）<br>${order.map(p => `第 ${r.rank[p]} 名　${PLAYER_NAME[p]}　${chipStr(match.chips[p])}${match.chips[p] <= 0 ? '　<b class="neg">破產</b>' : ''}`).join('<br>')}`;
+  }
   function chipsHtml(match) {                           // 三位玩家的籌碼；≤ 20% 起始籌碼標紅
     return [0, 1, 2].map(p => `<span class="chip ${p === 0 ? 'me' : ''} ${match.chips[p] <= START_CHIPS * 0.2 ? 'low' : ''}">${PLAYER_NAME[p]} <b>${chipStr(match.chips[p])}</b></span>`).join('');
   }
@@ -728,7 +739,9 @@ function initUI() {
     pressGroup('modeChoices', 'mode'); pressGroup('roleChoices', 'role');
     pressGroup('seatChoices', 'seatPick'); pressGroup('levelChoices', 'level');
     $('levelChoices').querySelectorAll('.choice').forEach(b => { b.disabled = !!live; });
-    $('matchBox').hidden = !live; $('newMatchBtn').hidden = !live;
+    const ended = S.mode === 'solo' && M.cur && M.cur.over ? M.cur : null;   // 剛結束的賽局：留在首頁給你看結果，直到開新賽局
+    $('matchBox').hidden = !(live || ended); $('newMatchBtn').hidden = !live;
+    if (ended) $('matchBox').innerHTML = `<b>上一場賽局已結束</b><div style="margin-top:6px">${endHtml(ended)}</div><div class="mute" style="margin-top:6px">可以重新選難度與身分，按「開始新賽局」。</div>`;
     if (live) $('matchBox').innerHTML = `<b>賽局進行中</b>（${LEVEL_NAME[live.level]}，已打 ${live.games} 局）<div class="chipbar" style="margin:8px 0 0">${chipsHtml(live)}</div><div class="mute" style="margin-top:6px">難度整場固定；任何人籌碼 ≤ 0 即結束。想換難度請先放棄這場。</div>`;
     $('goBtn').textContent = live ? '繼續賽局' : (S.mode === 'solo' ? '開始新賽局' : '開始觀戰');
     $('roleStep').hidden = S.mode === 'spectate';
@@ -942,13 +955,12 @@ function initUI() {
       return `<tr class="${s === G.me ? 'me' : ''}"><td>${who}</td><td>${note}</td><td class="num ${d > 0 ? 'pos' : 'neg'}">${fmt(d)}</td>${after}</tr>`;
     }).join('');
     let html = '';
-    if (G.after && G.after.over) {                         // 賽局結束：依最終籌碼排名，≤0 者標破產
-      const rk = rankMatch(G.after.chips), order = [0, 1, 2].sort((a, b2) => G.after.chips[b2] - G.after.chips[a] || a - b2);
-      html += `<div class="endbanner"><b>賽局結束</b>（共 ${G.after.games} 局）<br>${order.map(p => `第 ${rk[p]} 名　${PLAYER_NAME[p]}　${chipStr(G.after.chips[p])}${G.after.chips[p] <= 0 ? '　<b class="neg">破產</b>' : ''}`).join('<br>')}</div>`;
-    }
+    if (G.after && G.after.over) html += `<div class="endbanner">${endHtml(G.after)}</div>`;
     html += `<table class="settle"><tr><th>座位</th><th>算式（${LEVEL_NAME[G.level]}）</th><th>本局</th>${G.after ? '<th>籌碼</th>' : ''}</tr>${rows}</table>`;
     $('resScore').innerHTML = html;
-    $('againBtn').textContent = G.after && G.after.over ? '開新賽局' : '下一局';
+    $('againBtn').hidden = !!(G.after && G.after.over);   // 整場結束：不能直接再來一局，只能回首頁（可以重新選難度與身分）
+    $('resMenuBtn').textContent = G.after && G.after.over ? '回首頁' : '回選單';
+    $('againBtn').textContent = '下一局';
     if (G.players && M.cur) $('chipBar').innerHTML = chipsHtml(M.cur);   // 頂端籌碼列同步成結算後
   }
   function finish() {
@@ -964,6 +976,11 @@ function initUI() {
     }
     $('resTitle').textContent = title; $('resSub').textContent = sub;
     renderSettlement();
+    if (G.after && G.after.over) {                         // 整場結束：標題改成整場的贏家／輸家
+      const r = matchResult(G.after.chips);
+      $('resTitle').textContent = r.you === 'winner' ? '🏆 賽局結束：你是贏家' : r.you === 'loser' ? '賽局結束：你破產了' : `賽局結束：你第 ${r.rank[0]} 名`;
+      $('resSub').textContent = `最後一局：${sub}。按「回首頁」可重新選難度與身分`;
+    }
     const rest = $('resRest'); rest.innerHTML = '';
     [0, 1, 2].forEach(s => {
       if (!G.hands[s].length) return;

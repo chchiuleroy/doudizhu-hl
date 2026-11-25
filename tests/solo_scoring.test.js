@@ -106,6 +106,15 @@ t('rankMatch：由高到低，同分並列同名次且後面跳號，負數排�
   assert.deepStrictEqual(arr(rankMatch([3150, 0, -150])), [1, 2, 3]);
 });
 
+t('matchResult：你破產＝輸家；你第一＝贏家（可並列）；其餘＝中間；破產者與冠軍都列出', () => {
+  const norm = r => ({ rank: arr(r.rank), winners: arr(r.winners), bankrupt: arr(r.bankrupt), you: r.you });
+  assert.deepStrictEqual(norm(T.matchResult([-79, 1660, 1419])), { rank: [3, 1, 2], winners: [1], bankrupt: [0], you: 'loser' });
+  assert.deepStrictEqual(norm(T.matchResult([2000, 1100, -100])), { rank: [1, 2, 3], winners: [0], bankrupt: [2], you: 'winner' });
+  assert.deepStrictEqual(norm(T.matchResult([1100, 1900, 0])), { rank: [2, 1, 3], winners: [1], bankrupt: [2], you: 'middle' });
+  assert.deepStrictEqual(norm(T.matchResult([1500, 1500, 0])), { rank: [1, 1, 3], winners: [0, 1], bankrupt: [2], you: 'winner' });   // 並列第一
+  assert.deepStrictEqual(norm(T.matchResult([0, -50, 3050])), { rank: [2, 3, 1], winners: [2], bankrupt: [0, 1], you: 'loser' });     // 同局兩人破產
+});
+
 console.log('零和與整數（整局 NPC 對打）');
 t('每局三人得分和為 0、皆為整數、贏家得正輸家得負；賽局總籌碼恆為 3000', () => {
   for (const lv of ['easy', 'hard']) {
