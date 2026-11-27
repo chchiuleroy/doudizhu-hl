@@ -3,7 +3,7 @@ const fs = require('fs'), path = require('path'), vm = require('vm'), assert = r
 const html = fs.readFileSync(process.env.DDZ_HTML || path.join(__dirname, '..', 'index.html'), 'utf-8');
 const T = {};
 vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], { __TEST__: T, console, Date });
-const { START_CHIPS, SCORE_BASE, cardValue, handValue, settle, settleGame, PLAYER_NAME, assignSeats, newMatch, applySettlement, rankMatch,
+const { START_CHIPS, SCORE_BASE, cardValue, handValue, settle, settleGame, PLAYER_NAME, assignSeats, pickSeat, newMatch, applySettlement, rankMatch,
         RULES, makeDeck, makeGame, npcMove } = T;
 RULES.suit = true;
 
@@ -80,6 +80,23 @@ t('assignSeats：你永遠坐 me 座位；電腦甲乙填其餘座位，每局�
   assert.deepStrictEqual(arr(assignSeats(0, 1)), [0, 2, 1]);
   assert.deepStrictEqual(arr(assignSeats(1, 0)), [1, 0, 2]);   // 你坐座位 1：座位 0（地主）是電腦甲、座位 2 是電腦乙
   assert.deepStrictEqual(arr(assignSeats(1, 1)), [2, 0, 1]);   // 下一局甲乙對調
+});
+t('pickSeat：固定身分不吃亂數；隨機身分三座位等機率（地主 1/3）；農民隨機座位只在 1／2 之間抽', () => {
+  const boom = () => { throw new Error('固定身分不該呼叫亂數'); };
+  assert.strictEqual(pickSeat('landlord', '1', boom), 0);
+  assert.strictEqual(pickSeat('farmer', '1', boom), 1);
+  assert.strictEqual(pickSeat('farmer', '2', boom), 2);
+  // 亂數區間的邊界：[0,1/3)→0、[1/3,2/3)→1、[2/3,1)→2；農民隨機座位 [0,.5)→1、[.5,1)→2
+  [[0, 0], [0.3333, 0], [0.34, 1], [0.6666, 1], [0.67, 2], [0.9999, 2]].forEach(([r, want]) => assert.strictEqual(pickSeat('random', '1', () => r), want, `r=${r}`));
+  [[0, 1], [0.4999, 1], [0.5, 2], [0.9999, 2]].forEach(([r, want]) => assert.strictEqual(pickSeat('farmer', 'rand', () => r), want, `r=${r}`));
+  // 用真亂數抽 30000 次：三座位各約 1/3（二項標準誤約 0.27 個百分點，容許 ±2 個百分點）
+  const cnt = [0, 0, 0]; for (let i = 0; i < 30000; i++) cnt[pickSeat('random', '1', Math.random)]++;
+  cnt.forEach(c => assert.ok(Math.abs(c / 30000 - 1 / 3) < 0.02, `分布偏離：${cnt}`));
+});
+t('隨機身分下甲乙帳戶對稱：三座位等機率＋輪替，長期各座位出現次數與甲乙地主次數接近', () => {
+  const landlordCnt = [0, 0, 0];
+  for (let g = 0; g < 30000; g++) landlordCnt[arr(assignSeats(pickSeat('random', '1', Math.random), g))[0]]++;
+  landlordCnt.forEach(c => assert.ok(Math.abs(c / 30000 - 1 / 3) < 0.02, `地主分布偏離：${landlordCnt}`));
 });
 t('applySettlement：籌碼依座位對應到玩家、總和守恆、不改原物件、局數＋1', () => {
   const m0 = newMatch('hard');

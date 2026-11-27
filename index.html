@@ -101,6 +101,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .pos{color:var(--accent)}.neg{color:var(--warn)}
 .totalline{font-size:13px;margin:4px 0 2px}
 .chipbar{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 8px}
+.seatnote{margin:0 0 8px;font-size:13px;opacity:.9;line-height:1.5}
 .chip{display:inline-flex;align-items:baseline;gap:6px;padding:3px 12px;border-radius:99px;background:var(--panel);border:1px solid var(--line);font-size:13px}
 .chip b{font-variant-numeric:tabular-nums;font-size:15px}
 .chip.me{border-color:var(--gold)}
@@ -137,9 +138,10 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
 
   <section class="step" id="roleStep">
     <h2><b>2</b>選擇你的身分</h2>
-    <div class="choices c2" id="roleChoices">
+    <div class="choices c3" id="roleChoices">
       <button class="choice" data-v="landlord" aria-pressed="true"><b>👑 地主</b><span class="mute">20 張牌（含 3 張底牌），一人對兩位農民，先出完獲勝</span></button>
       <button class="choice" data-v="farmer" aria-pressed="false"><b>🌾 農民</b><span class="mute">17 張牌，與另一位農民（NPC）同隊對抗地主（NPC）</span></button>
+      <button class="choice" data-v="random" aria-pressed="false"><b>🎲 隨機身分</b><span class="mute">每局重新抽：地主、地主下家、地主上家各 1/3</span></button>
     </div>
     <div id="seatWrap" hidden style="margin-top:10px">
       <div class="mute" style="margin-bottom:6px">農民的座位（出牌順序：地主 → 地主下家 → 地主上家）</div>
@@ -173,7 +175,7 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
     <span class="mute" id="scoreLine"></span>
     <button class="btn ghost" id="resetScore">清除紀錄</button>
   </div>
-  <div class="mute" style="margin-top:14px;text-align:center;font-size:12px">版本 20261125c</div>
+  <div class="mute" style="margin-top:14px;text-align:center;font-size:12px">版本 20261127a</div>
 </main>
 
 <!-- ============ 牌桌 ============ -->
@@ -186,6 +188,7 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
     <button class="btn ghost" id="menuBtn">回選單</button>
   </div>
   <div class="chipbar" id="chipBar" hidden></div>
+  <div class="seatnote" id="seatNote" hidden></div>
   <div class="felt">
     <div class="row3">
       <div class="seat" id="seatL"></div>
@@ -249,6 +252,7 @@ dialog td,dialog th{border-bottom:1px solid var(--line);padding:4px 6px;text-ali
   </table>
   <table id="baseTable"><tr><th>NPC 難度</th><th>W（地主贏）</th><th>L（農民贏）</th></tr></table>
   <p><b>賽局</b>：你、電腦甲、電腦乙各 <span id="startChips"></span> 籌碼，每局依上面規則增減。<b>只要有人籌碼 ≤ 0，整場立即結束</b>（付款不封頂，所以可能是負的；同一局有兩人以上跌到 0 以下，都算破產）。結束後會說明誰是贏家、誰破產，再回到首頁，可以重新選難度與身分。依最終籌碼排名，同分並列。難度整場固定；中途回選單可以繼續，也可以放棄開新賽局。重新整理頁面只會丟掉「正在打的那一局」，已結算的籌碼會保留。</p>
+  <p><b>身分與座位</b>：身分可以固定（地主／農民，農民可選座位）或選「🎲 隨機身分」每局重抽（三個座位各 1/3）。電腦甲乙<b>每局輪流換座位</b>：同級電腦互打時，地主上家那位農民平均每局少約 17～20 籌碼、下家多約 16～17（NPC 對 NPC 的模擬結果，真人是否如此未驗證），輪流換位是為了讓兩位電腦平均分擔這個差距，不然固定坐上家的那位會很快破產。每局開始會提示換座結果，牌桌上方也會寫出本局座位。</p>
   <p class="mute">沒有叫牌、身分由你自選，所以兩個身分的期望得分要大致相當，才不會永遠選同一邊。W、L 是用「同級 NPC 三人對打」的數千局結果校準出來的：該級電腦互打時，地主與農民的平均每局得分都接近 0。<b>這不代表真人也公平</b>——你比電腦強或弱，某一邊就會比較賺。炸彈與春天不另外加倍（輸家完全沒出牌時，剩牌價值本來就最高）。</p>
   <form method="dialog"><button class="btn primary">關閉</button></form>
 </dialog>
@@ -566,6 +570,13 @@ function assignSeats(me, gameIdx) {                 // 回傳 playerAtSeat[seat]
   for (let s = 0; s < 3; s++) if (s !== me) out[s] = npcs.shift();
   return out;
 }
+/* 你這局坐哪個座位（0＝地主、1＝地主下家、2＝地主上家）。random＝三個座位等機率（地主 1/3），與校準時「每局隨機指定地主」的假設一致；
+ * 農民＋隨機座位＝下家／上家各半。rand 是 () => [0,1) 的亂數函式（測試可注入）。 */
+function pickSeat(role, seatPick, rand) {
+  if (role === 'landlord') return 0;
+  if (role === 'random') return Math.floor(rand() * 3);
+  return seatPick === 'rand' ? 1 + Math.floor(rand() * 2) : +seatPick;
+}
 function newMatch(level) { return { level, chips: [START_CHIPS, START_CHIPS, START_CHIPS], games: 0, over: false }; }
 function applySettlement(match, playerAtSeat, deltas) {   // 一局完整結算後才檢查終局；回傳新物件，不改原物件
   const chips = match.chips.slice();
@@ -674,7 +685,7 @@ function expertMove(G, seat, opts) {                // 測試與非同步 UI 共
 }
 
 if (typeof __TEST__ !== 'undefined') {
-  Object.assign(__TEST__, { START_CHIPS, SCORE_BASE, cardValue, handValue, settle, settleGame, PLAYER_NAME, assignSeats, newMatch, applySettlement, rankMatch, matchResult, RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
+  Object.assign(__TEST__, { START_CHIPS, SCORE_BASE, cardValue, handValue, settle, settleGame, PLAYER_NAME, assignSeats, pickSeat, newMatch, applySettlement, rankMatch, matchResult, RULES, makeDeck, makeRng, classify, beats, generateAll, legalPlays, npcChoose, makeGame, applyPlay, applyPass, npcMove, sortHand, isPower, farmersWin,
                             publicInfo, determinize, pimcCandidates, pimcChoose, expertMove, shuffle });
 }
 
@@ -685,7 +696,7 @@ function initUI() {
   const $ = id => document.getElementById(id);
   const S = { mode: 'solo', role: 'landlord', seatPick: '1', level: 'hard', suit: true };
   const params = new URLSearchParams(location.search);
-  let G = null, sel = new Set(), timer = null, token = 0, hintSet = null, startOpts = null;
+  let G = null, sel = new Set(), timer = null, token = 0, hintSet = null, startOpts = null, lastLayout = null;
 
   /* ---- 設定／統計（localStorage 可能被擋：全部 try/catch） ---- */
   const store = {
@@ -749,6 +760,7 @@ function initUI() {
     $('suitRule').checked = !!S.suit;
     const lv = { easy: '簡單', hard: '標準', expert: '困難' }[S.level] || '標準';
     if (S.mode === 'spectate') $('summary').innerHTML = `<b>觀戰</b>：三位 NPC（${lv}）對打。`;
+    else if (S.role === 'random') $('summary').innerHTML = `你<b>每局重新抽身分</b>：地主、地主下家、地主上家各 1/3；NPC（${lv}）補上其餘兩個座位。`;
     else if (S.role === 'landlord') $('summary').innerHTML = `你是 <b>👑 地主</b>；NPC（${lv}）補上 <b>地主下家</b> 與 <b>地主上家</b>（兩位農民）。`;
     else {
       const sp = S.seatPick === '1' ? '地主下家' : S.seatPick === '2' ? '地主上家' : '隨機座位';
@@ -781,20 +793,30 @@ function initUI() {
     sel = new Set(); hintSet = null;
     $('start').hidden = true; $('game').hidden = false; $('result').hidden = true;
     render(); schedule();
+    seatToast();
+  }
+  /* 開局提示：抽到什麼身分、電腦甲乙有沒有換位（甲乙每局輪替是為了讓兩位電腦平均分擔「上家座位長期吃虧」，見規則說明） */
+  function seatToast() {
+    if (!G.players || !M.cur) { lastLayout = null; return; }
+    const layout = G.players.join(''), msgs = [];
+    if (startOpts.role === 'random') msgs.push(`🎲 抽到：你是${G.me === 0 ? '地主' : '農民（' + seatName(G.me) + '）'}`);
+    if (lastLayout && lastLayout !== layout) {
+      const moved = [1, 2].map(p => `${PLAYER_NAME[p]}→${seatName(G.players.indexOf(p))}`).join('，');
+      msgs.push(`換座：${moved}`);
+    }
+    lastLayout = layout;
+    if (msgs.length) toast(msgs.join('　'), 4200);
   }
   function startFromMenu() {
     const seed = params.get('seed') ? +params.get('seed') : Math.floor(Math.random() * 1e9);
-    let me = null;
-    if (S.mode === 'solo') {
-      if (S.role === 'landlord') me = 0;
-      else me = S.seatPick === 'rand' ? 1 + Math.floor(Math.random() * 2) : +S.seatPick;
-    }
-    startGame({ seed, me, level: S.level, suit: !!S.suit, mode: S.mode });
+    const solo = S.mode === 'solo', me = solo ? pickSeat(S.role, S.seatPick, Math.random) : null;
+    lastLayout = null;                                      // 從選單開始＝新的一串，不跟上一場比較
+    startGame({ seed, me, level: S.level, suit: !!S.suit, mode: S.mode, role: S.role, seatPick: S.seatPick });
   }
   $('goBtn').onclick = startFromMenu;
   $('menuBtn').onclick = () => { token++; clearTimeout(timer); $('game').hidden = true; $('start').hidden = false; $('result').hidden = true; refreshStart(); };
   $('resMenuBtn').onclick = $('menuBtn').onclick;
-  $('againBtn').onclick = () => startGame({ ...startOpts, seed: Math.floor(Math.random() * 1e9) });
+  $('againBtn').onclick = () => startGame({ ...startOpts, me: startOpts.me === null ? null : pickSeat(startOpts.role, startOpts.seatPick, Math.random), seed: Math.floor(Math.random() * 1e9) });   // 隨機身分／隨機座位每局重抽
   $('rulesBtn1').onclick = $('rulesBtn2').onclick = () => $('rulesDlg').showModal();
 
   /* ---- 牌桌顯示 ---- */
@@ -843,6 +865,8 @@ function initUI() {
     $('suitBadge').textContent = RULES.suit ? '花色 ♠>♥>♦>♣ 開啟' : '花色規則 關閉';
     $('chipBar').hidden = !G.players || !M.cur;
     if (G.players && M.cur) $('chipBar').innerHTML = chipsHtml(M.cur);
+    $('seatNote').hidden = !G.players;
+    if (G.players) $('seatNote').textContent = '本局座位　' + [0, 1, 2].map(s => `${seatName(s)}：${PLAYER_NAME[G.players[s]]}`).join('　｜　') + '（電腦甲乙每局輪流換座位）';
     $('legend').textContent = RULES.suit ? '同點數時比花色：♠ > ♥ > ♦ > ♣（點數優先於花色）' : '同點數不能互壓';
     seatBox($('seatL'), left, G.turn); seatBox($('seatR'), right, G.turn);
     $('bottomRow').innerHTML = ''; $('bottomRow').appendChild(miniRow(G.bottom, 'sm'));
@@ -872,7 +896,7 @@ function initUI() {
   }
 
   /* ---- 出牌流程 ---- */
-  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 1600); }
+  function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), ms || 1600); }
   function after() {
     sel = new Set(); hintSet = null; render();
     if (G.over) return finish();
